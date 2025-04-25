@@ -73,41 +73,10 @@ terraform import sophosfirewall_iphost.web_server web_server
 ```
 
 
-# Terraform Provider for Sophos Firewall
 
-This project demonstrates how to use the **custom Terraform provider for Sophos Firewall** to manage network firewall rules via the Sophos XML API.
+# Resource: sophosfirewall_firewall_rule
 
-> ✅ Use Terraform to automate, version, and deploy your firewall policies with ease.
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- [Terraform](https://www.terraform.io/downloads.html) v1.3 or later
-- Sophos Firewall with XML API access enabled
-- Admin credentials to the firewall
-
----
-
-## 🔧 Provider Configuration
-
-Define the provider block in your Terraform configuration:
-
-```hcl
-provider "sophos" {
-  url      = "https://192.168.1.1:4444"
-  username = "admin"
-  password = var.sophos_password
-}
-
-
-variable "sophos_password" {
-  description = "Password for Sophos Firewall"
-  type        = string
-  sensitive   = true
-}
+Manage Firewall rules in Sophos Firewall. 
 
 resource "sophos_firewall_rule" "allow_internal_web" {
   name        = "Allow Internal Web Traffic"
