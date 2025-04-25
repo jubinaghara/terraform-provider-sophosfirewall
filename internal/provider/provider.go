@@ -1,4 +1,4 @@
-// internal/provider/provider.go
+// provider.go
 package provider
 
 import (
@@ -22,6 +22,7 @@ type SophosProviderModel struct {
 	Endpoint types.String `tfsdk:"endpoint"`
 	Username types.String `tfsdk:"username"`
 	Password types.String `tfsdk:"password"`
+	Insecure types.Bool   `tfsdk:"insecure"`
 }
 
 func New() provider.Provider {
@@ -30,7 +31,7 @@ func New() provider.Provider {
 
 // Metadata returns the provider type name
 func (p *SophosProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "sophos"
+	resp.TypeName = "sophosfirewall"
 }
 
 // Schema defines the provider-level schema for configuration data
@@ -51,6 +52,10 @@ func (p *SophosProvider) Schema(_ context.Context, _ provider.SchemaRequest, res
 				Required:    true,
 				Sensitive:   true,
 			},
+			"insecure": schema.BoolAttribute{
+				Description: "Skip TLS certificate verification",
+				Optional:    true,
+			},
 		},
 	}
 }
@@ -64,11 +69,17 @@ func (p *SophosProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		return
 	}
 
+	insecure := false
+	if !config.Insecure.IsNull() {
+		insecure = config.Insecure.ValueBool()
+	}
+
 	// Create a Sophos client using the configuration
 	client := NewSophosClient(
 		config.Endpoint.ValueString(),
 		config.Username.ValueString(),
 		config.Password.ValueString(),
+		insecure,
 	)
 
 	resp.ResourceData = client
@@ -79,6 +90,7 @@ func (p *SophosProvider) Configure(ctx context.Context, req provider.ConfigureRe
 func (p *SophosProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewIPHostResource,
+		NewFirewallRuleResource,
 	}
 }
 
@@ -88,3 +100,4 @@ func (p *SophosProvider) DataSources(_ context.Context) []func() datasource.Data
 		NewIPHostDataSource,
 	}
 }
+

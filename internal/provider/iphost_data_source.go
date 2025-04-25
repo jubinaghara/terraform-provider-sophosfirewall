@@ -1,4 +1,5 @@
-// internal/provider/iphost_data_source.go
+//iphost_data
+
 package provider
 
 import (

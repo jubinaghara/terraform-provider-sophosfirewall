@@ -1,4 +1,4 @@
-// internal/provider/iphost_resource.go
+//iphost_resource.go
 package provider
 
 import (
@@ -25,14 +25,14 @@ type ipHostResource struct {
 // ipHostResourceModel maps the resource schema data
 type ipHostResourceModel struct {
 	Name            types.String `tfsdk:"name"`
-	IPFamily        types.String `tfsdk:"ip_family"`
-	HostType        types.String `tfsdk:"host_type"`
-	IPAddress       types.String `tfsdk:"ip_address"`
-	Subnet          types.String `tfsdk:"subnet"`
-	StartIPAddress  types.String `tfsdk:"start_ip_address"`
-	EndIPAddress    types.String `tfsdk:"end_ip_address"`
+	IPFamily          types.String `tfsdk:"ip_family"`
+	HostType          types.String `tfsdk:"host_type"`
+	IPAddress         types.String `tfsdk:"ip_address"`
+	Subnet            types.String `tfsdk:"subnet"`
+	StartIPAddress    types.String `tfsdk:"start_ip_address"`
+	EndIPAddress      types.String `tfsdk:"end_ip_address"`
 	ListOfIPAddresses types.String `tfsdk:"list_of_ip_addresses"`
-	HostGroups      []types.String `tfsdk:"host_groups"`
+	HostGroups        []types.String `tfsdk:"host_groups"`
 }
 
 // NewIPHostResource creates a new resource
@@ -124,14 +124,15 @@ func (r *ipHostResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	// Map from the terraform model to the API model
 	ipHost := &IPHost{
-		Name:           plan.Name.ValueString(),
-		IPFamily:       plan.IPFamily.ValueString(),
-		HostType:       plan.HostType.ValueString(),
-		IPAddress:      plan.IPAddress.ValueString(),
-		Subnet:         plan.Subnet.ValueString(),
-		StartIPAddress: plan.StartIPAddress.ValueString(),
-		EndIPAddress:   plan.EndIPAddress.ValueString(),
+		Name:            plan.Name.ValueString(),
+		IPFamily:          plan.IPFamily.ValueString(),
+		HostType:          plan.HostType.ValueString(),
+		IPAddress:         plan.IPAddress.ValueString(),
+		Subnet:            plan.Subnet.ValueString(),
+		StartIPAddress:    plan.StartIPAddress.ValueString(),
+		EndIPAddress:      plan.EndIPAddress.ValueString(),
 		ListOfIPAddresses: plan.ListOfIPAddresses.ValueString(),
+		TransactionID:     "", // Set empty
 	}
 
 	// Add host groups if specified
@@ -215,14 +216,15 @@ func (r *ipHostResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// Map from the terraform model to the API model
 	ipHost := &IPHost{
-		Name:           plan.Name.ValueString(),
-		IPFamily:       plan.IPFamily.ValueString(),
-		HostType:       plan.HostType.ValueString(),
-		IPAddress:      plan.IPAddress.ValueString(),
-		Subnet:         plan.Subnet.ValueString(),
-		StartIPAddress: plan.StartIPAddress.ValueString(),
-		EndIPAddress:   plan.EndIPAddress.ValueString(),
+		Name:            plan.Name.ValueString(),
+		IPFamily:          plan.IPFamily.ValueString(),
+		HostType:          plan.HostType.ValueString(),
+		IPAddress:         plan.IPAddress.ValueString(),
+		Subnet:            plan.Subnet.ValueString(),
+		StartIPAddress:    plan.StartIPAddress.ValueString(),
+		EndIPAddress:      plan.EndIPAddress.ValueString(),
 		ListOfIPAddresses: plan.ListOfIPAddresses.ValueString(),
+		TransactionID:     "",
 	}
 
 	// Add host groups if specified
@@ -269,3 +271,4 @@ func (r *ipHostResource) ImportState(ctx context.Context, req resource.ImportSta
 	// Import by name
 	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
 }
+
