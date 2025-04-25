@@ -71,3 +71,79 @@ IP host objects can be imported using the name:
 ```
 terraform import sophosfirewall_iphost.web_server web_server
 ```
+
+
+# Terraform Provider for Sophos Firewall
+
+This project demonstrates how to use the **custom Terraform provider for Sophos Firewall** to manage network firewall rules via the Sophos XML API.
+
+> ✅ Use Terraform to automate, version, and deploy your firewall policies with ease.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Terraform](https://www.terraform.io/downloads.html) v1.3 or later
+- Sophos Firewall with XML API access enabled
+- Admin credentials to the firewall
+
+---
+
+## 🔧 Provider Configuration
+
+Define the provider block in your Terraform configuration:
+
+```hcl
+provider "sophos" {
+  url      = "https://192.168.1.1:4444"
+  username = "admin"
+  password = var.sophos_password
+}
+
+
+variable "sophos_password" {
+  description = "Password for Sophos Firewall"
+  type        = string
+  sensitive   = true
+}
+
+resource "sophos_firewall_rule" "allow_internal_web" {
+  name        = "Allow Internal Web Traffic"
+  description = "Allow HTTP/HTTPS traffic from LAN to WAN"
+  policy_type = "Network"
+  status      = "Enable"
+  position    = "Top"
+  ip_family   = "IPv4"
+
+  action              = "Accept"
+  log_traffic         = "Enable"
+  skip_local_destined = "Disable"
+
+  source_zones        = ["LAN"]
+  destination_zones   = ["WAN"]
+
+  source_networks      = ["LAN_NETWORK"]
+  destination_networks = ["Any"]
+}
+
+resource "sophos_firewall_rule" "block_social_media" {
+  name        = "Block Social Media"
+  description = "Block access to social media sites"
+  policy_type = "Network"
+  status      = "Enable"
+  position    = "After"
+  after_rule  = sophos_firewall_rule.allow_internal_web.name
+
+  action              = "Drop"
+  log_traffic         = "Enable"
+  skip_local_destined = "Disable"
+
+  source_zones        = ["LAN"]
+  destination_zones   = ["WAN"]
+
+  schedule = "Business_Hours"
+}
+
+
