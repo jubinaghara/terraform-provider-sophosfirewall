@@ -1,4 +1,3 @@
-=======
 ---
 page_title: "sophosfirewall_iphost Resource - terraform-provider-sophosfirewall"
 subcategory: "Firewall"
@@ -99,5 +98,3 @@ resource "sophos_firewall_rule" "allow_internal_web" {
   destination_networks = ["Any"]
 }
 ```
-
->>>>>>> 72e777625875233f5d9256e10ea21b8f85576446
