@@ -78,6 +78,7 @@ terraform import sophosfirewall_iphost.web_server web_server
 
 Manage Firewall rules in Sophos Firewall. 
 
+```
 resource "sophos_firewall_rule" "allow_internal_web" {
   name        = "Allow Internal Web Traffic"
   description = "Allow HTTP/HTTPS traffic from LAN to WAN"
@@ -96,23 +97,5 @@ resource "sophos_firewall_rule" "allow_internal_web" {
   source_networks      = ["LAN_NETWORK"]
   destination_networks = ["Any"]
 }
-
-resource "sophos_firewall_rule" "block_social_media" {
-  name        = "Block Social Media"
-  description = "Block access to social media sites"
-  policy_type = "Network"
-  status      = "Enable"
-  position    = "After"
-  after_rule  = sophos_firewall_rule.allow_internal_web.name
-
-  action              = "Drop"
-  log_traffic         = "Enable"
-  skip_local_destined = "Disable"
-
-  source_zones        = ["LAN"]
-  destination_zones   = ["WAN"]
-
-  schedule = "Business_Hours"
-}
-
+```
 
