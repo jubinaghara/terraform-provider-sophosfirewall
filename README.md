@@ -86,6 +86,7 @@ resource "sophos_firewall_rule" "allow_internal_web" {
   status      = "Enable"
   position    = "Top"
   ip_family   = "IPv4"
+  schedule    = "All the time"
 
   action              = "Accept"
   log_traffic         = "Enable"
