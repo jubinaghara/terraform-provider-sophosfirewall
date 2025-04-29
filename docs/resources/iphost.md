@@ -1,6 +1,6 @@
 ---
-page_title: "Sophos: sophos_iphost"
-subcategory: "Network"
+page_title: "Sophos: sophosfirewall_iphost"
+subcategory: "Host & Objects"
 description: |-
   Manages a Sophos IP Host object.
 ---
@@ -9,24 +9,19 @@ description: |-
 
 Manages a Sophos IP Host object. This resource allows you to create, update, and delete IP Host entries in your Sophos firewall.
 
-## Example Usage
+## Example Usage for Single IP address
 
 ```hcl
-resource "sophos_iphost" "webserver" {
-  name        = "WebServer01"
-  ip_address  = "192.168.1.100"
-  description = "Primary web server"
-}
-
-# Simple IP host example
 resource "sophosfirewall_iphost" "single_ip" {
   name       = "web_server"
   ip_family  = "IPv4"
   host_type  = "IP"
   ip_address = "192.168.1.10"
 }
+```
 
-# IP Range example
+## Example Usage for IP range
+```hcl
 resource "sophosfirewall_iphost" "ip_range" {
   name            = "dhcp_clients"
   ip_family       = "IPv4"
@@ -34,8 +29,10 @@ resource "sophosfirewall_iphost" "ip_range" {
   start_ip_address = "192.168.1.100"
   end_ip_address   = "192.168.1.200"
 }
+```
 
-# Network example
+## Example Usage for Network
+```hcl
 resource "sophosfirewall_iphost" "network" {
   name       = "internal_lan"
   ip_family  = "IPv4"
@@ -43,8 +40,20 @@ resource "sophosfirewall_iphost" "network" {
   ip_address = "10.0.0.0"
   subnet     = "255.255.0.0"
 }
+```
 
-# IPv6 example
+## Example Usage for IP list
+```hcl
+resource "sophosfirewall_iphost" "listofIPaddresstest1234" {
+  name      = "listofIPaddresstest1234"
+  ip_family  = "IPv4"
+  host_type  = "IPList"
+  list_of_ip_addresses  = "192.168.1.30,192.168.2.30"
+}
+```
+
+## Example Usage for IPv6 address
+```hcl
 resource "sophosfirewall_iphost" "ipv6_host" {
   name       = "ipv6_server"
   ip_family  = "IPv6"
@@ -66,5 +75,5 @@ The following arguments are supported:
 IP Hosts can be imported using the name, e.g.,
 
 ```
-$ terraform import sophos_iphost.webserver WebServer01
+$ terraform import sophosfirewall_iphost.webserver WebServer01
 ```

@@ -91,6 +91,7 @@ func (p *SophosProvider) Resources(_ context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		NewIPHostResource,
 		NewFirewallRuleResource,
+		NewMACHostResource,
 	}
 }
 

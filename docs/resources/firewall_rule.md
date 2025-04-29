@@ -1,6 +1,6 @@
 ---
-page_title: "Sophos: sophos_firewall_rule"
-subcategory: "Firewall"
+page_title: "Sophos: sophosfirewall_firewall_rule"
+subcategory: "Rules & Policies"
 description: |-
   Manages a Sophos Firewall rule.
 ---

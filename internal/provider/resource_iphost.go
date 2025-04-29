@@ -180,24 +180,41 @@ func (r *ipHostResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	// Map from the API model to the terraform model
-	state.IPFamily = types.StringValue(ipHost.IPFamily)
-	state.HostType = types.StringValue(ipHost.HostType)
-	state.IPAddress = types.StringValue(ipHost.IPAddress)
-	state.Subnet = types.StringValue(ipHost.Subnet)
-	state.StartIPAddress = types.StringValue(ipHost.StartIPAddress)
-	state.EndIPAddress = types.StringValue(ipHost.EndIPAddress)
-	state.ListOfIPAddresses = types.StringValue(ipHost.ListOfIPAddresses)
-
-	// Map host groups
-	if ipHost.HostGroupList != nil && len(ipHost.HostGroupList.HostGroups) > 0 {
-		hostGroups := make([]types.String, 0, len(ipHost.HostGroupList.HostGroups))
-		for _, hg := range ipHost.HostGroupList.HostGroups {
-			hostGroups = append(hostGroups, types.StringValue(hg))
+	// Only update state fields that are returned by the API
+	// and only when they're not system hosts
+	if ipHost.HostType != "System Host" {
+		state.IPFamily = types.StringValue(ipHost.IPFamily)
+		state.HostType = types.StringValue(ipHost.HostType)
+		
+		// Only set these fields if they exist in the response
+		if ipHost.IPAddress != "" {
+			state.IPAddress = types.StringValue(ipHost.IPAddress)
 		}
-		state.HostGroups = hostGroups
-	} else {
-		state.HostGroups = []types.String{}
+		if ipHost.Subnet != "" {
+			state.Subnet = types.StringValue(ipHost.Subnet)
+		}
+		if ipHost.StartIPAddress != "" {
+			state.StartIPAddress = types.StringValue(ipHost.StartIPAddress)
+		}
+		if ipHost.EndIPAddress != "" {
+			state.EndIPAddress = types.StringValue(ipHost.EndIPAddress)
+		}
+		if ipHost.ListOfIPAddresses != "" {
+			state.ListOfIPAddresses = types.StringValue(ipHost.ListOfIPAddresses)
+		}
+
+		// Only set host groups if they are explicitly configured in the resource
+		// and returned by the API
+		if ipHost.HostGroupList != nil && len(ipHost.HostGroupList.HostGroups) > 0 && len(state.HostGroups) > 0 {
+			hostGroups := make([]types.String, 0, len(ipHost.HostGroupList.HostGroups))
+			for _, hg := range ipHost.HostGroupList.HostGroups {
+				hostGroups = append(hostGroups, types.StringValue(hg))
+			}
+			state.HostGroups = hostGroups
+		} else if len(state.HostGroups) == 0 {
+			// Only initialize to empty slice if it wasn't set in the config
+			state.HostGroups = []types.String{}
+		}
 	}
 
 	// Save the updated state
