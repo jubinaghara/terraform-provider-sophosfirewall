@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/machost"
 )
 
 // Ensure the implementation satisfies the expected interfaces
@@ -17,7 +18,7 @@ var _ datasource.DataSource = &macHostDataSource{}
 
 // macHostDataSource is the data source implementation
 type macHostDataSource struct {
-	client *SophosClient
+	client *machost.Client
 }
 
 // NewMACHostDataSource creates a new data source
@@ -76,7 +77,7 @@ func (d *macHostDataSource) Configure(_ context.Context, req datasource.Configur
 		return
 	}
 
-	d.client = client
+	d.client = machost.NewClient(client.BaseClient)
 }
 
 // macHostDataSourceModel maps the data source schema data

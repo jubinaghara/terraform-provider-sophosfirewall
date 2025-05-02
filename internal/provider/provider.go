@@ -90,8 +90,9 @@ func (p *SophosProvider) Configure(ctx context.Context, req provider.ConfigureRe
 func (p *SophosProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewIPHostResource,
-		NewFirewallRuleResource,
+		NewIPHostGroupResource,
 		NewMACHostResource,
+		NewFirewallRuleResource,
 	}
 }
 

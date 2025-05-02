@@ -1,10 +1,11 @@
+// resource_machost.go
+
 package provider
 
 import (
 	"context"
 	"fmt"
 	"strings"
-	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -12,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/machost"
 )
 
 // Ensure the implementation satisfies the expected interfaces
@@ -20,7 +22,7 @@ var _ resource.ResourceWithImportState = &macHostResource{}
 
 // macHostResource is the resource implementation
 type macHostResource struct {
-	client *SophosClient
+	client *machost.Client
 }
 
 // macHostResourceModel maps the resource schema data
@@ -89,13 +91,13 @@ func (r *macHostResource) Configure(_ context.Context, req resource.ConfigureReq
 		return
 	}
 
-	r.client = client
+	r.client = machost.NewClient(client.BaseClient)
 }
 
 // parseMACList parses a comma-separated string into a slice of MAC addresses
 func parseMACList(macList string) []string {
 	if macList == "" {
-		return []string{} // Return empty slice instead of nil for consistency
+		return nil
 	}
 	
 	// Split by comma and deduplicate MAC addresses
@@ -115,7 +117,6 @@ func parseMACList(macList string) []string {
 }
 
 // Create creates a new MAC Host
-// Create creates a new MAC Host
 func (r *macHostResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan macHostResourceModel
 	diags := req.Plan.Get(ctx, &plan)
@@ -124,89 +125,25 @@ func (r *macHostResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Normalize the type value to be case-consistent 
-	hostType := strings.ToUpper(plan.Type.ValueString())
-	
+	// Parse MAC addresses from the comma-separated string and ensure uniqueness
+	macAddresses := parseMACList(plan.ListOfMACAddresses.ValueString())
+
 	// Map from the terraform model to the API model
-	macHost := &MACHost{
-		Name:          plan.Name.ValueString(),
-		TransactionID: "", // Set empty
+	macHost := &machost.MACHost{
+		Name:              plan.Name.ValueString(),
+		Description:       plan.Description.ValueString(),
+		Type:              plan.Type.ValueString(),
+		TransactionID:     "", // Set empty
 	}
 	
-	// Set description properly (empty string if not provided)
-	if !plan.Description.IsNull() {
-		macHost.Description = plan.Description.ValueString()
-	} else {
-		macHost.Description = ""
-	}
-	
-	// Handle field values based on the normalized type
-	if hostType == "MACADDRESS" {
-		macHost.Type = "MACAddress" // Set the exact case the API expects
-		
-		if !plan.MACAddress.IsNull() {
-			// Validate MAC address format
-			macAddr := plan.MACAddress.ValueString()
-			if !isValidMACAddress(macAddr) {
-				resp.Diagnostics.AddError("Invalid MAC Address Format", 
-					fmt.Sprintf("MAC address '%s' is not in a valid format. Use format 'XX:XX:XX:XX:XX:XX'", macAddr))
-				return
-			}
-			
-			macHost.MACAddress = macAddr
-		} else {
-			resp.Diagnostics.AddError("Missing MAC Address", "MACAddress type requires a MAC address")
-			return
-		}
-		
+	// Set proper field based on type
+	if plan.Type.ValueString() == "MACAddress" {
+		macHost.MACAddress = plan.MACAddress.ValueString()
 		macHost.ListOfMACAddresses = nil
-		
-		// Ensure the state will be consistent
-		plan.MACAddress = types.StringValue(macHost.MACAddress)
-		plan.ListOfMACAddresses = types.StringNull()
-	} else if hostType == "MACLIST" {
-		macHost.Type = "MACLIST" // Set the exact case the API expects
-		
-		// Parse MAC addresses from the comma-separated string
-		if !plan.ListOfMACAddresses.IsNull() {
-			macAddressStr := plan.ListOfMACAddresses.ValueString()
-			
-			// For empty string, set to empty list
-			if macAddressStr == "" {
-				macHost.ListOfMACAddresses = []string{}
-				plan.ListOfMACAddresses = types.StringValue("")
-			} else {
-				macAddresses := parseMACList(macAddressStr)
-				
-				// Validate each MAC address
-				for _, mac := range macAddresses {
-					if !isValidMACAddress(mac) {
-						resp.Diagnostics.AddError("Invalid MAC Address Format", 
-							fmt.Sprintf("MAC address '%s' is not in a valid format. Use format 'XX:XX:XX:XX:XX:XX'", mac))
-						return
-					}
-				}
-				
-				macHost.ListOfMACAddresses = macAddresses
-				
-				// Update plan to ensure consistent format in state
-				if len(macAddresses) > 0 {
-					plan.ListOfMACAddresses = types.StringValue(strings.Join(macAddresses, ","))
-				} else {
-					plan.ListOfMACAddresses = types.StringValue("")
-				}
-			}
-		} else {
-			// Empty list is valid but should be consistent
-			macHost.ListOfMACAddresses = []string{}
-			plan.ListOfMACAddresses = types.StringValue("")
-		}
-		
+	} else { // MACList type
 		macHost.MACAddress = ""
-		plan.MACAddress = types.StringNull()
-	} else {
-		resp.Diagnostics.AddError("Invalid Type", "Type must be either 'MACAddress' or 'MACLIST'")
-		return
+		macHost.ListOfMACAddresses = macAddresses
+		macHost.Type = "MACLIST"
 	}
 
 	// Create the MAC Host
@@ -216,22 +153,16 @@ func (r *macHostResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Save the normalized type in the state
-	plan.Type = types.StringValue(macHost.Type)
+	// Update the plan with any computed values
+	// If it's a list type, ensure consistent representation of MAC addresses
+	if plan.Type.ValueString() == "MACLIST" && len(macAddresses) > 0 {
+		plan.ListOfMACAddresses = types.StringValue(strings.Join(macAddresses, ","))
+		plan.MACAddress = types.StringNull()
+	}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 }
-
-// Helper function to validate MAC address format
-func isValidMACAddress(mac string) bool {
-	// Basic MAC address format validation using regex
-	// Format should be XX:XX:XX:XX:XX:XX where X is a hex digit
-	macRegex := regexp.MustCompile(`^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$`)
-	return macRegex.MatchString(mac)
-}
-
-
 
 // Read refreshes the Terraform state with the latest data
 func (r *macHostResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -257,43 +188,56 @@ func (r *macHostResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	// Update state with values from API
 	state.Name = types.StringValue(macHost.Name)
-	state.Type = types.StringValue(macHost.Type)
 	
-	// Set description consistently
 	if macHost.Description != "" {
 		state.Description = types.StringValue(macHost.Description)
 	} else {
-		state.Description = types.StringValue("")
+		state.Description = types.StringNull()
 	}
 	
-	// Handle MAC address fields based on type 
-	if macHost.Type == "MACAddress" {
-		state.MACAddress = types.StringValue(macHost.MACAddress)
+	state.Type = types.StringValue(macHost.Type)
+	
+	// Handle MAC address fields based on type (case-insensitive comparison)
+	typeUpper:= strings.ToUpper(macHost.Type)
+	
+	// Set the exact type value from the API
+	state.Type = types.StringValue(macHost.Type)
+	
+	if typeUpper == "MACADDRESS" {
+		if macHost.MACAddress != "" {
+			state.MACAddress = types.StringValue(macHost.MACAddress)
+		} else {
+			state.MACAddress = types.StringNull()
+		}
 		state.ListOfMACAddresses = types.StringNull()
-	} else if macHost.Type == "MACLIST" {
+	} else if typeUpper == "MACLIST" {
 		state.MACAddress = types.StringNull()
 		
-		// Ensure we have the list of MAC addresses from the API response
+		// Convert MAC addresses back to comma-separated string
 		if macHost.ListOfMACAddresses != nil && len(macHost.ListOfMACAddresses) > 0 {
-			state.ListOfMACAddresses = types.StringValue(strings.Join(macHost.ListOfMACAddresses, ","))
+			// Only include unique MAC addresses
+			uniqueMACs := make(map[string]bool)
+			var uniqueList []string
+			
+			for _, mac := range macHost.ListOfMACAddresses {
+				if !uniqueMACs[mac] {
+					uniqueMACs[mac] = true
+					uniqueList = append(uniqueList, mac)
+				}
+			}
+			
+			state.ListOfMACAddresses = types.StringValue(strings.Join(uniqueList, ","))
 		} else {
+			// Always set an empty string instead of null for MACLIST type to avoid unknown values
 			state.ListOfMACAddresses = types.StringValue("")
 		}
-	} else {
-		// Unexpected type - log warning and set fields to null
-		resp.Diagnostics.AddWarning(
-			"Unexpected MAC Host Type",
-			fmt.Sprintf("Unexpected MAC Host type: %s", macHost.Type),
-		)
-		state.MACAddress = types.StringNull()
-		state.ListOfMACAddresses = types.StringNull()
 	}
+
 
 	// Save the updated state
 	diags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 }
-
 
 // Update updates the resource and sets the updated Terraform state
 func (r *macHostResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -304,64 +248,43 @@ func (r *macHostResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Normalize the type value to be case-consistent
-	hostType := strings.ToUpper(plan.Type.ValueString())
-	
+	// Parse MAC addresses from the comma-separated string and ensure uniqueness
+	macAddresses := parseMACList(plan.ListOfMACAddresses.ValueString())
+
 	// Map from the terraform model to the API model
-	macHost := &MACHost{
-		Name:          plan.Name.ValueString(),
-		TransactionID: "", // Set empty
+	macHost := &machost.MACHost{
+		Name:           plan.Name.ValueString(),
+		Description:    plan.Description.ValueString(),
+		Type:           plan.Type.ValueString(),
+		TransactionID:  "", // Set empty
 	}
 	
-	// Set description properly (empty string if not provided)
-	if !plan.Description.IsNull() {
-		macHost.Description = plan.Description.ValueString()
-	} else {
-		macHost.Description = ""
-	}
-	
-	// Handle field values based on the normalized type
-	if hostType == "MACADDRESS" {
-		macHost.Type = "MACAddress" // Set the exact case the API expects
-		
-		if !plan.MACAddress.IsNull() {
-			macHost.MACAddress = plan.MACAddress.ValueString()
-		} else {
-			resp.Diagnostics.AddError("Missing MAC Address", "MACAddress type requires a MAC address")
-			return
-		}
-		
+	// Set proper field based on type (case-insensitive comparison)
+	typeUpper:= strings.ToUpper(plan.Type.ValueString())
+
+	if typeUpper == "MACADDRESS" {
+		macHost.MACAddress = plan.MACAddress.ValueString()
 		macHost.ListOfMACAddresses = nil
+		macHost.Type = "MACAddress" // Ensure consistent type naming
 		
-		// Ensure the state will be consistent
-		plan.MACAddress = types.StringValue(macHost.MACAddress)
+		// Update the plan with standardized type and ensure ListOfMACAddresses is null
+		plan.Type = types.StringValue("MACAddress")
 		plan.ListOfMACAddresses = types.StringNull()
-	} else if hostType == "MACLIST" {
-		macHost.Type = "MACLIST" // Set the exact case the API expects
-		
-		// Parse MAC addresses from the comma-separated string
-		if !plan.ListOfMACAddresses.IsNull() {
-			macAddresses := parseMACList(plan.ListOfMACAddresses.ValueString())
-			macHost.ListOfMACAddresses = macAddresses
-			
-			// Update plan to ensure consistent format in state
-			if len(macAddresses) > 0 {
-				plan.ListOfMACAddresses = types.StringValue(strings.Join(macAddresses, ","))
-			} else {
-				plan.ListOfMACAddresses = types.StringValue("")
-			}
-		} else {
-			// Empty list is valid but should be consistent
-			macHost.ListOfMACAddresses = []string{}
-			plan.ListOfMACAddresses = types.StringValue("")
-		}
-		
+	} else if typeUpper == "MACLIST" {
 		macHost.MACAddress = ""
+		macHost.ListOfMACAddresses = macAddresses
+		macHost.Type = "MACLIST" // Ensure consistent type naming
+		
+		// Update the plan with standardized type and ensure MACAddress is null
+		plan.Type = types.StringValue("MACLIST")
 		plan.MACAddress = types.StringNull()
-	} else {
-		resp.Diagnostics.AddError("Invalid Type", "Type must be either 'MACAddress' or 'MACLIST'")
-		return
+		
+		// Update the plan with deduplicated MAC addresses
+		if len(macAddresses) > 0 {
+			plan.ListOfMACAddresses = types.StringValue(strings.Join(macAddresses, ","))
+		}
 	}
+
 
 	// Update the MAC Host
 	err := r.client.UpdateMACHost(macHost)
@@ -369,9 +292,6 @@ func (r *macHostResource) Update(ctx context.Context, req resource.UpdateRequest
 		resp.Diagnostics.AddError("Error updating MAC Host", err.Error())
 		return
 	}
-
-	// Save the normalized type in the state
-	plan.Type = types.StringValue(macHost.Type)
 
 	// Update the state with the updated values
 	diags = resp.State.Set(ctx, plan)

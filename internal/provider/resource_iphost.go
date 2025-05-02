@@ -4,6 +4,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -11,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/iphost"
 )
 
 // Ensure the implementation satisfies the expected interfaces
@@ -19,21 +21,24 @@ var _ resource.ResourceWithImportState = &ipHostResource{}
 
 // ipHostResource is the resource implementation
 type ipHostResource struct {
-	client *SophosClient
+	client *iphost.Client
 }
+
 
 // ipHostResourceModel maps the resource schema data
 type ipHostResourceModel struct {
-	Name            types.String `tfsdk:"name"`
-	IPFamily          types.String `tfsdk:"ip_family"`
-	HostType          types.String `tfsdk:"host_type"`
-	IPAddress         types.String `tfsdk:"ip_address"`
-	Subnet            types.String `tfsdk:"subnet"`
-	StartIPAddress    types.String `tfsdk:"start_ip_address"`
-	EndIPAddress      types.String `tfsdk:"end_ip_address"`
-	ListOfIPAddresses types.String `tfsdk:"list_of_ip_addresses"`
-	HostGroups        []types.String `tfsdk:"host_groups"`
+	Name             types.String   `tfsdk:"name"`
+	IPFamily         types.String   `tfsdk:"ip_family"`
+	HostType         types.String   `tfsdk:"host_type"`
+	IPAddress        types.String   `tfsdk:"ip_address"`
+	Subnet           types.String   `tfsdk:"subnet"`
+	StartIPAddress   types.String   `tfsdk:"start_ip_address"`
+	EndIPAddress     types.String   `tfsdk:"end_ip_address"`
+	ListOfIPAddresses types.String   `tfsdk:"list_of_ip_addresses"`
+	HostGroups       []types.String `tfsdk:"host_groups"`
 }
+
+
 
 // NewIPHostResource creates a new resource
 func NewIPHostResource() resource.Resource {
@@ -105,12 +110,13 @@ func (r *ipHostResource) Configure(_ context.Context, req resource.ConfigureRequ
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *SophosClient, got: %T", req.ProviderData),
+			fmt.Sprintf("Expected *iphost.Client, got: %T", req.ProviderData),
 		)
 		return
 	}
 
-	r.client = client
+	// Create the iphost client from the base client
+	r.client = iphost.NewClient(client.BaseClient)
 }
 
 // Create creates a new IP Host
@@ -123,7 +129,7 @@ func (r *ipHostResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	// Map from the terraform model to the API model
-	ipHost := &IPHost{
+	ipHost := &iphost.IPHost{
 		Name:            plan.Name.ValueString(),
 		IPFamily:          plan.IPFamily.ValueString(),
 		HostType:          plan.HostType.ValueString(),
@@ -137,7 +143,7 @@ func (r *ipHostResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	// Add host groups if specified
 	if len(plan.HostGroups) > 0 {
-		ipHost.HostGroupList = &HostGroupList{
+		ipHost.HostGroupList = &iphost.HostGroupList{
 			HostGroups: make([]string, 0, len(plan.HostGroups)),
 		}
 		for _, hg := range plan.HostGroups {
@@ -174,47 +180,68 @@ func (r *ipHostResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
+	log.Printf("[DEBUG] Resource Read function - Retrieved IP Host: %+v", ipHost) // Log the retrieved object
+
 	if ipHost == nil {
 		// Resource no longer exists
 		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	// Only update state fields that are returned by the API
-	// and only when they're not system hosts
-	if ipHost.HostType != "System Host" {
-		state.IPFamily = types.StringValue(ipHost.IPFamily)
-		state.HostType = types.StringValue(ipHost.HostType)
+	// Update state fields regardless of host type
+	state.Name = types.StringValue(ipHost.Name)
+	state.IPFamily = types.StringValue(ipHost.IPFamily)
+	state.HostType = types.StringValue(ipHost.HostType)
 		
-		// Only set these fields if they exist in the response
-		if ipHost.IPAddress != "" {
-			state.IPAddress = types.StringValue(ipHost.IPAddress)
-		}
-		if ipHost.Subnet != "" {
-			state.Subnet = types.StringValue(ipHost.Subnet)
-		}
-		if ipHost.StartIPAddress != "" {
-			state.StartIPAddress = types.StringValue(ipHost.StartIPAddress)
-		}
-		if ipHost.EndIPAddress != "" {
-			state.EndIPAddress = types.StringValue(ipHost.EndIPAddress)
-		}
-		if ipHost.ListOfIPAddresses != "" {
-			state.ListOfIPAddresses = types.StringValue(ipHost.ListOfIPAddresses)
-		}
+	// Handle field values based on the HostType
+	switch ipHost.HostType {
+	case "IP":
+		state.IPAddress = types.StringValue(ipHost.IPAddress)
+		// Explicitly set null for fields not applicable to this type
+		state.Subnet = types.StringNull()
+		state.StartIPAddress = types.StringNull()
+		state.EndIPAddress = types.StringNull()
+		state.ListOfIPAddresses = types.StringNull()
+	case "Network":
+		state.IPAddress = types.StringValue(ipHost.IPAddress)
+		state.Subnet = types.StringValue(ipHost.Subnet)
+		// Clear other fields
+		state.StartIPAddress = types.StringNull()
+		state.EndIPAddress = types.StringNull()
+		state.ListOfIPAddresses = types.StringNull()
+	case "IPRange":
+		state.StartIPAddress = types.StringValue(ipHost.StartIPAddress)
+		state.EndIPAddress = types.StringValue(ipHost.EndIPAddress)
+		// Clear other fields
+		state.IPAddress = types.StringNull()
+		state.Subnet = types.StringNull()
+		state.ListOfIPAddresses = types.StringNull()
+	case "IPList":
+		state.ListOfIPAddresses = types.StringValue(ipHost.ListOfIPAddresses)
+		// Clear other fields
+		state.IPAddress = types.StringNull()
+		state.Subnet = types.StringNull()
+		state.StartIPAddress = types.StringNull()
+		state.EndIPAddress = types.StringNull()
+	case "System Host":
+		// For system hosts, explicitly set all fields to null
+		state.IPAddress = types.StringNull()
+		state.Subnet = types.StringNull()
+		state.StartIPAddress = types.StringNull()
+		state.EndIPAddress = types.StringNull()
+		state.ListOfIPAddresses = types.StringNull()
+	}
 
-		// Only set host groups if they are explicitly configured in the resource
-		// and returned by the API
-		if ipHost.HostGroupList != nil && len(ipHost.HostGroupList.HostGroups) > 0 && len(state.HostGroups) > 0 {
-			hostGroups := make([]types.String, 0, len(ipHost.HostGroupList.HostGroups))
-			for _, hg := range ipHost.HostGroupList.HostGroups {
-				hostGroups = append(hostGroups, types.StringValue(hg))
-			}
-			state.HostGroups = hostGroups
-		} else if len(state.HostGroups) == 0 {
-			// Only initialize to empty slice if it wasn't set in the config
-			state.HostGroups = []types.String{}
+	// Handle host groups consistently
+	if ipHost.HostGroupList != nil && len(ipHost.HostGroupList.HostGroups) > 0 {
+		hostGroups := make([]types.String, 0, len(ipHost.HostGroupList.HostGroups))
+		for _, hg := range ipHost.HostGroupList.HostGroups {
+			hostGroups = append(hostGroups, types.StringValue(hg))
 		}
+		state.HostGroups = hostGroups
+	} else {
+		// Always initialize to empty slice when API returns no host groups
+		state.HostGroups = []types.String{}
 	}
 
 	// Save the updated state
@@ -232,7 +259,7 @@ func (r *ipHostResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// Map from the terraform model to the API model
-	ipHost := &IPHost{
+	ipHost := &iphost.IPHost{
 		Name:            plan.Name.ValueString(),
 		IPFamily:          plan.IPFamily.ValueString(),
 		HostType:          plan.HostType.ValueString(),
@@ -246,7 +273,7 @@ func (r *ipHostResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// Add host groups if specified
 	if len(plan.HostGroups) > 0 {
-		ipHost.HostGroupList = &HostGroupList{
+		ipHost.HostGroupList = &iphost.HostGroupList{
 			HostGroups: make([]string, 0, len(plan.HostGroups)),
 		}
 		for _, hg := range plan.HostGroups {

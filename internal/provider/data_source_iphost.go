@@ -5,10 +5,12 @@ package provider
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/iphost"
 )
 
 // Ensure the implementation satisfies the expected interfaces
@@ -16,7 +18,7 @@ var _ datasource.DataSource = &ipHostDataSource{}
 
 // ipHostDataSource is the data source implementation
 type ipHostDataSource struct {
-	client *SophosClient
+	client *iphost.Client
 }
 
 // NewIPHostDataSource creates a new data source
@@ -90,12 +92,13 @@ func (d *ipHostDataSource) Configure(_ context.Context, req datasource.Configure
 		return
 	}
 
-	d.client = client
+	d.client = iphost.NewClient(client.BaseClient)
 }
 
-// Read refreshes the Terraform state with the latest data
+// Fixed Resource Read Function
 func (d *ipHostDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config ipHostResourceModel
+	
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -109,6 +112,8 @@ func (d *ipHostDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
+	log.Printf("[DEBUG] Data Source Read function - Retrieved IP Host: %+v", ipHost) // Log the retrieved object
+
 	if ipHost == nil {
 		resp.Diagnostics.AddError(
 			"IP Host not found",
@@ -117,16 +122,47 @@ func (d *ipHostDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	// Map the data from the API model to the data source model
+	// Always set these fields
+	config.Name = types.StringValue(ipHost.Name)
 	config.IPFamily = types.StringValue(ipHost.IPFamily)
 	config.HostType = types.StringValue(ipHost.HostType)
-	config.IPAddress = types.StringValue(ipHost.IPAddress)
-	config.Subnet = types.StringValue(ipHost.Subnet)
-	config.StartIPAddress = types.StringValue(ipHost.StartIPAddress)
-	config.EndIPAddress = types.StringValue(ipHost.EndIPAddress)
-	config.ListOfIPAddresses = types.StringValue(ipHost.ListOfIPAddresses)
+	
+	// Handle field values based on the HostType to avoid drift
+	switch ipHost.HostType {
+	case "IP":
+		config.IPAddress = types.StringValue(ipHost.IPAddress)
+		config.Subnet = types.StringNull()
+		config.StartIPAddress = types.StringNull()
+		config.EndIPAddress = types.StringNull()
+		config.ListOfIPAddresses = types.StringNull()
+	case "Network":
+		config.IPAddress = types.StringValue(ipHost.IPAddress)
+		config.Subnet = types.StringValue(ipHost.Subnet)
+		config.StartIPAddress = types.StringNull()
+		config.EndIPAddress = types.StringNull()
+		config.ListOfIPAddresses = types.StringNull()
+	case "IPRange":
+		config.IPAddress = types.StringNull()
+		config.Subnet = types.StringNull()
+		config.StartIPAddress = types.StringValue(ipHost.StartIPAddress)
+		config.EndIPAddress = types.StringValue(ipHost.EndIPAddress)
+		config.ListOfIPAddresses = types.StringNull()
+	case "IPList":
+		config.IPAddress = types.StringNull()
+		config.Subnet = types.StringNull()
+		config.StartIPAddress = types.StringNull()
+		config.EndIPAddress = types.StringNull()
+		config.ListOfIPAddresses = types.StringValue(ipHost.ListOfIPAddresses)
+	case "System Host":
+		// For system hosts, set all type-specific fields to null
+		config.IPAddress = types.StringNull()
+		config.Subnet = types.StringNull()
+		config.StartIPAddress = types.StringNull()
+		config.EndIPAddress = types.StringNull()
+		config.ListOfIPAddresses = types.StringNull()
+	}
 
-	// Map host groups
+	// Map host groups consistently
 	if ipHost.HostGroupList != nil && len(ipHost.HostGroupList.HostGroups) > 0 {
 		hostGroups := make([]types.String, 0, len(ipHost.HostGroupList.HostGroups))
 		for _, hg := range ipHost.HostGroupList.HostGroups {
@@ -134,6 +170,7 @@ func (d *ipHostDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		}
 		config.HostGroups = hostGroups
 	} else {
+		// Always initialize to empty slice
 		config.HostGroups = []types.String{}
 	}
 

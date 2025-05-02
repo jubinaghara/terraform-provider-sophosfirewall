@@ -1,6 +1,6 @@
 ---
 page_title: "Sophos: sophosfirewall_machost"
-subcategory: "Host & Objects"
+subcategory: "Host & Objects > MAC Host"
 description: |-
   Manages a Sophos Firewall MAC host.
 ---

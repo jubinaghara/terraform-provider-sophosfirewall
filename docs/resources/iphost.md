@@ -1,6 +1,6 @@
 ---
 page_title: "Sophos: sophosfirewall_iphost"
-subcategory: "Host & Objects"
+subcategory: "Host & Objects > IP Host"
 description: |-
   Manages a Sophos IP Host object.
 ---
@@ -25,7 +25,7 @@ resource "sophosfirewall_iphost" "single_ip" {
 resource "sophosfirewall_iphost" "ip_range" {
   name            = "dhcp_clients"
   ip_family       = "IPv4"
-  host_type       = "Range"
+  host_type       = "IPRange"
   start_ip_address = "192.168.1.100"
   end_ip_address   = "192.168.1.200"
 }
