@@ -54,6 +54,11 @@ func Collections() map[string]sfostest.Collection {
 		"/network/addresses/mac":          {OnCreate: macType},
 		"/network/addresses/fqdn":         {},
 		"/network/address-groups/country": {},
+		"/network/address-groups/ipv4":    {Defaults: map[string]any{"description": "", "ipv4Addresses": []any{}}},
+		"/network/address-groups/ipv6":    {Defaults: map[string]any{"description": "", "ipv6Addresses": []any{}}},
+		"/network/address-groups/fqdn":    {Defaults: map[string]any{"description": "", "fqdns": []any{}}},
+		"/network/services":               {OnCreate: servicePorts},
+		"/network/service-groups":         {},
 		"/network/zones":                  {Defaults: map[string]any{"description": ""}},
 		"/firewall/rules/ipv4": rule(map[string]any{
 			"logTraffic": false,
@@ -89,6 +94,21 @@ func Collections() map[string]sfostest.Collection {
 				}
 			},
 		},
+		"/network/dhcp/server/servers/ipv4": {
+			Defaults: map[string]any{"enabled": true, "acceptRelayRequests": false, "conflictDetection": false},
+			OnCreate: dhcpOptionTypes,
+		},
+		"/authentication/user-groups":         {OnCreate: userGroupDefaults},
+		"/routing/static-unicast-routes/ipv4": {Defaults: map[string]any{"metric": 0, "administrativeDistance": 1}},
+		"/routing/gateways/custom/ipv4":       {OnCreate: gatewayHealthCheckDefaults},
+		"/sd-wan/routes/ipv4": rule(map[string]any{
+			"enabled":       true,
+			"applications":  map[string]any{"any": true},
+			"usersOrGroups": map[string]any{"any": true},
+		}),
+		"/network/dns/host-entries": {Defaults: map[string]any{"enableReverseResolution": false}},
+		"/web/url-groups":           {Defaults: map[string]any{"description": ""}},
+		"/administration/schedules": {Defaults: map[string]any{"description": ""}},
 	}
 }
 
@@ -97,5 +117,87 @@ func macType(obj map[string]any) {
 		obj["type"] = "macList"
 	} else {
 		obj["type"] = "macAddress"
+	}
+}
+
+// servicePorts fills in the port ranges the firewall assumes for TCP/UDP
+// service entries that omit them, and reports single ports as from == to.
+func servicePorts(obj map[string]any) {
+	entries, _ := obj["services"].([]any)
+	for _, e := range entries {
+		entry, ok := e.(map[string]any)
+		if !ok || entry["protocol"] == nil {
+			continue
+		}
+		for _, k := range []string{"sourcePort", "destinationPort"} {
+			port, ok := entry[k].(map[string]any)
+			switch {
+			case !ok:
+				entry[k] = map[string]any{"from": 1, "to": 65535}
+			case port["from"] == nil:
+				port["from"] = port["to"]
+			}
+		}
+	}
+}
+
+// dhcpOptionTypes resolves the name and type of DHCP options like the
+// firewall does, for a few standard codes.
+func dhcpOptionTypes(obj map[string]any) {
+	standard := map[float64][2]string{15: {"Domain_Name", "fqdn"}, 42: {"NTP_Servers", "ipv4AddrArray"}, 66: {"TFTP_Server_Name", "string"}}
+	opts, _ := obj["dhcpOptions"].([]any)
+	for _, o := range opts {
+		opt := o.(map[string]any)
+		if std, ok := standard[opt["code"].(float64)]; ok {
+			opt["option"], opt["type"] = std[0], std[1]
+		} else {
+			opt["option"] = "Custom"
+		}
+	}
+}
+
+// userGroupDefaults fills in the policy and VPN settings the firewall
+// always returns for a user group.
+func userGroupDefaults(obj map[string]any) {
+	if _, ok := obj["description"]; !ok {
+		obj["description"] = ""
+	}
+	if _, ok := obj["emailQuarantineDigest"]; !ok {
+		obj["emailQuarantineDigest"] = false
+	}
+	policies, _ := obj["policies"].(map[string]any)
+	if policies == nil {
+		policies = map[string]any{}
+		obj["policies"] = policies
+	}
+	for k, v := range map[string]any{"allowedNetworksIpv4": map[string]any{"any": true}, "macBinding": false} {
+		if _, ok := policies[k]; !ok {
+			policies[k] = v
+		}
+	}
+	vpn, _ := obj["vpnAccess"].(map[string]any)
+	if vpn == nil {
+		vpn = map[string]any{}
+		obj["vpnAccess"] = vpn
+	}
+	for _, k := range []string{"l2tp", "pptp", "ipsecVpnRemoteAccess"} {
+		if _, ok := vpn[k]; !ok {
+			vpn[k] = false
+		}
+	}
+}
+
+// gatewayHealthCheckDefaults fills in the firewall's health check defaults
+// (60 s interval, 2 s timeout, 3 retries) for a new custom gateway.
+func gatewayHealthCheckDefaults(obj map[string]any) {
+	hc, ok := obj["healthCheck"].(map[string]any)
+	if !ok {
+		hc = map[string]any{"enabled": false}
+		obj["healthCheck"] = hc
+	}
+	for k, v := range map[string]any{"intervalBetweenChecks": 60, "responseTimeout": 2, "retries": 3} {
+		if _, ok := hc[k]; !ok {
+			hc[k] = v
+		}
 	}
 }

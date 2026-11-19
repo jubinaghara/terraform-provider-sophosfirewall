@@ -96,6 +96,16 @@ var Interface = &framework.Resource[interfaceModel, networkInterface]{
 		if m.HardwareName.IsUnknown() {
 			ni.HardwareName = ""
 		}
+		// The firewall rejects bridge and LAG creation without an MTU
+		// ("Invalid mtu"); use the web console defaults when none is set.
+		if t := ni.Type; t == "bridge" || t == "lag" {
+			if ni.MTU == nil {
+				ni.MTU = framework.Int64Ptr(types.Int64Value(1500))
+			}
+			if ni.MSS == nil {
+				ni.MSS = framework.Int64Ptr(types.Int64Value(1460))
+			}
+		}
 		if v := m.VLAN; v != nil {
 			ni.VLANDetails = &vlanDetails{VLANID: v.VLANID.ValueInt64(), ParentInterface: sfos.NameRef{Name: v.ParentInterface.ValueString()}}
 		}
@@ -187,6 +197,7 @@ var Interface = &framework.Resource[interfaceModel, networkInterface]{
 func validateInterface(_ context.Context, m *interfaceModel, diags *diag.Diagnostics) {
 	validateIP("ipv4", m.IPv4, diags)
 	validateIP("ipv6", m.IPv6, diags)
+	validateMTU(m.MTU, m.MSS, diags)
 	if m.Type.IsUnknown() {
 		return
 	}
@@ -200,8 +211,11 @@ func validateInterface(_ context.Context, m *interfaceModel, diags *diag.Diagnos
 			diags.AddAttributeError(path.Root(block), "Unexpected block", fmt.Sprintf("%q can only be set when type is %q.", block, block))
 		}
 	}
-	if m.Type.ValueString() != "vlan" && !m.Zone.IsNull() {
-		diags.AddAttributeError(path.Root("zone"), "Unexpected zone", "zone only applies to VLAN interfaces; set the zone of bridge members in bridge.members.")
+	if m.Type.ValueString() == "lag" && m.Zone.IsNull() {
+		diags.AddAttributeError(path.Root("zone"), "Missing zone", "The firewall requires a zone for LAG interfaces.")
+	}
+	if m.Type.ValueString() == "bridge" && !m.Zone.IsNull() {
+		diags.AddAttributeError(path.Root("zone"), "Unexpected zone", "Bridge interfaces have no zone of their own; set the zone of each member in bridge.members.")
 	}
 }
 
@@ -232,7 +246,7 @@ func interfaceSchema() schema.Schema {
 			MarkdownDescription: "Description. Only applicable to bridge interfaces.",
 			Validators:          []validator.String{stringvalidator.LengthAtMost(100)},
 		},
-		"zone": zoneAttribute("Zone of the interface. Only applicable to VLAN interfaces."),
+		"zone": zoneAttribute("Zone of the interface. Applies to VLAN and LAG interfaces (the firewall requires it for a LAG); bridges set a zone per member."),
 		"vlan": schema.SingleNestedAttribute{
 			Optional:            true,
 			MarkdownDescription: "VLAN settings. Required when `type` is `vlan`. Changing this forces a new resource.",

@@ -42,7 +42,7 @@ resource "sophosfirewall_physical_interface" "wan" {
 - `ipv6` (Attributes) IPv6 configuration. Omit to leave it unmanaged. (see [below for nested schema](#nestedatt--ipv6))
 - `mac_address` (String) MAC address used when `override_mac` is true.
 - `mss` (Number) Maximum segment size (536-8960).
-- `mtu` (Number) Maximum transmission unit (576-9000).
+- `mtu` (Number) Maximum transmission unit (576-9000). The firewall requires it to exceed `mss` by at least 40, so set `mss` too when lowering the MTU below the current MSS + 40.
 - `override_mac` (Boolean) Override the factory MAC address with `mac_address`.
 - `zone` (String) Zone of the interface.
 

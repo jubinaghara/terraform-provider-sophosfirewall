@@ -87,9 +87,9 @@ resource "sophosfirewall_interface" "bridge" {
 - `ipv6` (Attributes) IPv6 configuration. Omit to leave it unmanaged. (see [below for nested schema](#nestedatt--ipv6))
 - `lag` (Attributes) Link aggregation settings. Required when `type` is `lag`. (see [below for nested schema](#nestedatt--lag))
 - `mss` (Number) Maximum segment size (536-8960).
-- `mtu` (Number) Maximum transmission unit (576-9000).
+- `mtu` (Number) Maximum transmission unit (576-9000). The firewall requires it to exceed `mss` by at least 40, so set `mss` too when lowering the MTU below the current MSS + 40.
 - `vlan` (Attributes) VLAN settings. Required when `type` is `vlan`. Changing this forces a new resource. (see [below for nested schema](#nestedatt--vlan))
-- `zone` (String) Zone of the interface. Only applicable to VLAN interfaces.
+- `zone` (String) Zone of the interface. Applies to VLAN and LAG interfaces (the firewall requires it for a LAG); bridges set a zone per member.
 
 ### Read-Only
 

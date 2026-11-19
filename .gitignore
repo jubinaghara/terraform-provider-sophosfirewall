@@ -28,3 +28,6 @@ Thumbs.db
 # Local firewall credentials and demo artefacts
 firewall_details.txt
 tfplan
+
+# Claude Code worktrees and local settings
+.claude/

@@ -59,7 +59,9 @@ func (p *sfosProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 			"*Administration > API access* in the web admin console.\n\n" +
 			"Provider versions `23.x` and later are a rewrite for the REST API and are not compatible with " +
 			"configurations written for `1.x`, which used the legacy XML API with a username and password. " +
-			"Pin `version = \"~> 1.0\"` to stay on the old provider.",
+			"Pin `version = \"~> 1.0\"` to stay on the old provider.\n\n" +
+			"> **Note:** This is not an official Sophos Firewall (SFOS) provider. It is developed independently " +
+			"and has been tested in a limited capacity. Try changes on a non-production firewall first.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
 				Optional: true,

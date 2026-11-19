@@ -186,7 +186,7 @@ func mtuAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"mtu": schema.Int64Attribute{
 			Optional: true, Computed: true,
-			MarkdownDescription: "Maximum transmission unit (576-9000).",
+			MarkdownDescription: "Maximum transmission unit (576-9000). The firewall requires it to exceed `mss` by at least 40, so set `mss` too when lowering the MTU below the current MSS + 40.",
 			Validators:          []validator.Int64{int64validator.Between(576, 9000)},
 			PlanModifiers:       []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 		},
@@ -227,4 +227,16 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// validateMTU checks the firewall rule "MTU must exceed MSS by at least 40
+// bytes" when both values are configured.
+func validateMTU(mtu, mss types.Int64, diags *diag.Diagnostics) {
+	if mtu.IsNull() || mtu.IsUnknown() || mss.IsNull() || mss.IsUnknown() {
+		return
+	}
+	if mtu.ValueInt64()-mss.ValueInt64() < 40 {
+		diags.AddAttributeError(path.Root("mss"), "Invalid MSS",
+			fmt.Sprintf("mss (%d) must be at least 40 lower than mtu (%d).", mss.ValueInt64(), mtu.ValueInt64()))
+	}
 }

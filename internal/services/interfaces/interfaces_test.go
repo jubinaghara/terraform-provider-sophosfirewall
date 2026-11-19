@@ -103,6 +103,7 @@ resource "sophosfirewall_interface" "lag" {
   name          = "Lag1"
   hardware_name = "Lag1"
   type          = "lag"
+  zone          = "LAN"
   lag = {
     members = ["Port6", "Port7"]
     mode    = "lacp8023ad"

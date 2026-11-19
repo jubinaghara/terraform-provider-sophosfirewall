@@ -46,6 +46,14 @@ func newAPIError(method, path string, status int, body []byte) error {
 	return e
 }
 
+// IsRunConfigFailed reports whether the firewall stored a change but could
+// not activate it, e.g. "addRunConfigFailed" for a static route whose
+// interface has no link. The configuration object may exist despite the error.
+func IsRunConfigFailed(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && strings.HasSuffix(apiErr.ErrorCode, "RunConfigFailed")
+}
+
 // IsNotFound reports whether err is an HTTP 404 from the API.
 func IsNotFound(err error) bool {
 	var apiErr *APIError

@@ -4,9 +4,16 @@ import (
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/framework"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/addresses"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/addressgroups"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/administration"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/authentication"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/dhcp"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/dns"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/firewall"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/interfaces"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/nat"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/routing"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/servicesobj"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/web"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/zones"
 )
 
@@ -22,6 +29,11 @@ var registry = []framework.Registration{
 	addresses.MACAddress,
 	addresses.FQDNAddress,
 	addressgroups.CountryGroup,
+	addressgroups.IPv4Group,
+	addressgroups.IPv6Group,
+	addressgroups.FQDNGroup,
+	servicesobj.Service,
+	servicesobj.ServiceGroup,
 
 	// Configure > Network
 	zones.Zone,
@@ -31,4 +43,24 @@ var registry = []framework.Registration{
 	// Protect > Rules and policies
 	firewall.RuleIPv4,
 	nat.RuleIPv4,
+
+	// Configure > Network > DHCP
+	dhcp.Server,
+
+	// Configure > Authentication
+	authentication.UserGroup,
+
+	// Configure > Routing
+	routing.StaticRouteIPv4,
+	routing.GatewayIPv4,
+	routing.SDWANRouteIPv4,
+
+	// Configure > Network > DNS
+	dns.HostEntry,
+
+	// Protect > Web
+	web.URLGroup,
+
+	// System > Profiles
+	administration.Schedule,
 }

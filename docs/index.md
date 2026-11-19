@@ -5,6 +5,7 @@ description: |-
   The Sophos Firewall provider manages Sophos Firewall (SFOS) configuration through the Firewall Configuration REST API (/api/firewall-config/v1).
   Requires SFOS v23.0 or later. Create an API key under Administration > API access in the web admin console.
   Provider versions 23.x and later are a rewrite for the REST API and are not compatible with configurations written for 1.x, which used the legacy XML API with a username and password. Pin version = "~> 1.0" to stay on the old provider.
+  **Note:** This is not an official Sophos Firewall (SFOS) provider. It is developed independently and has been tested in a limited capacity. Try changes on a non-production firewall first.
 ---
 
 # sophosfirewall Provider
@@ -14,6 +15,8 @@ The **Sophos Firewall** provider manages Sophos Firewall (SFOS) configuration th
 **Requires SFOS v23.0 or later.** Create an API key under *Administration > API access* in the web admin console.
 
 Provider versions `23.x` and later are a rewrite for the REST API and are not compatible with configurations written for `1.x`, which used the legacy XML API with a username and password. Pin `version = "~> 1.0"` to stay on the old provider.
+
+> **Note:** This is not an official Sophos Firewall (SFOS) provider. It is developed independently and has been tested in a limited capacity. Try changes on a non-production firewall first.
 
 ## Example Usage
 

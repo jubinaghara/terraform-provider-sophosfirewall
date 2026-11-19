@@ -84,7 +84,13 @@ func (r *genericResource[M, A]) Create(ctx context.Context, req resource.CreateR
 	} else {
 		var created json.RawMessage
 		if err := r.client.Post(ctx, r.spec.Path, body, &created); err != nil {
-			resp.Diagnostics.AddError(fmt.Sprintf("Unable to create %s %q", r.spec.Title, name), err.Error())
+			detail := err.Error()
+			if sfos.IsRunConfigFailed(err) {
+				// The firewall saved the object but could not activate it.
+				// Roll it back so a retry does not fail with "already exists".
+				detail += "\n\nThe firewall stored the object but could not activate it. " + r.rollback(ctx, name)
+			}
+			resp.Diagnostics.AddError(fmt.Sprintf("Unable to create %s %q", r.spec.Title, name), detail)
 			return
 		}
 		id = idOf(created)
@@ -203,9 +209,43 @@ func (r *genericResource[M, A]) Delete(ctx context.Context, req resource.DeleteR
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.Delete(ctx, sfos.ItemPath(r.spec.Path, id)); err != nil && !sfos.IsNotFound(err) {
+	if err := r.deleteItem(ctx, id); err != nil {
 		resp.Diagnostics.AddError(fmt.Sprintf("Unable to delete %s %q", r.spec.Title, id), err.Error())
 	}
+}
+
+// deleteItem deletes an object and treats it as deleted once it is gone.
+// The firewall sometimes reports "delRunConfigFailed" or "deleted": false
+// while still removing the object, so the outcome is checked with a read.
+func (r *genericResource[M, A]) deleteItem(ctx context.Context, id string) error {
+	path := sfos.ItemPath(r.spec.Path, id)
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		err = r.client.Delete(ctx, path)
+		if sfos.IsNotFound(err) || (err == nil && attempt == 0) {
+			return nil
+		}
+		var existing json.RawMessage
+		if getErr := r.client.Get(ctx, path, &existing); sfos.IsNotFound(getErr) {
+			return nil
+		}
+		if err == nil {
+			err = fmt.Errorf("DELETE %s succeeded but the object still exists", path)
+		}
+	}
+	return err
+}
+
+// rollback removes an object the firewall stored despite a failed create
+// and returns a sentence describing the outcome for the error message.
+func (r *genericResource[M, A]) rollback(ctx context.Context, name string) string {
+	if name == "" {
+		return "Check the firewall for a leftover object before retrying."
+	}
+	if err := r.deleteItem(ctx, name); err != nil {
+		return fmt.Sprintf("Removing it again failed (%s); delete %q on the firewall before retrying.", err, name)
+	}
+	return "It has been removed again, so the create can be retried once the cause is fixed."
 }
 
 // ImportState accepts either the UUID or the name of the object.

@@ -3,6 +3,9 @@
 Manage Sophos Firewall configuration as code through the
 **Firewall Configuration REST API** (`https://<firewall>:<port>/api/firewall-config/v1`).
 
+> **Note:** This is not an official Sophos Firewall (SFOS) provider. It is developed independently
+> and has been tested in a limited capacity. Try changes on a non-production firewall first.
+
 ## Compatibility
 
 | Provider version | Sophos Firewall (SFOS) | API | Authentication |
@@ -56,14 +59,26 @@ Create the API key under **Administration > API access** in the web admin consol
 | | `sophosfirewall_mac_address` (single or list) | yes |
 | | `sophosfirewall_fqdn_address` | yes |
 | | `sophosfirewall_country_group` | yes |
+| | `sophosfirewall_ipv4_group`, `sophosfirewall_ipv6_group`, `sophosfirewall_fqdn_group` | yes |
+| | `sophosfirewall_service` (TCP/UDP, IP protocol, ICMP, ICMPv6) | yes (also built-in services such as `HTTPS`) |
+| | `sophosfirewall_service_group` | yes |
 | Network | `sophosfirewall_zone` | yes (also built-in zones such as `LAN`) |
 | | `sophosfirewall_interface` (VLAN, bridge, LAG) | yes (any interface) |
 | | `sophosfirewall_physical_interface` (adopts existing ports) | – |
+| | `sophosfirewall_dhcp_server` (IPv4) | yes |
+| | `sophosfirewall_dns_host_entry` | yes |
+| Routing | `sophosfirewall_static_route` (IPv4) | yes |
+| | `sophosfirewall_gateway` (custom IPv4 gateways) | yes |
+| | `sophosfirewall_sdwan_route` (IPv4, ordered) | yes |
 | Rules and policies | `sophosfirewall_firewall_rule` (IPv4) | yes |
 | | `sophosfirewall_nat_rule` (IPv4 SNAT / DNAT / port forwarding) | yes |
+| Web | `sophosfirewall_url_group` | yes |
+| Authentication | `sophosfirewall_user_group` | yes (also built-in groups such as `Open Group`) |
+| System | `sophosfirewall_schedule` (recurring or one-time) | yes |
 
 Every resource supports `terraform import` by UUID or name. Full documentation is in
-[`docs/`](docs/) and on the Terraform Registry.
+[`docs/`](docs/) and on the Terraform Registry. [`test/live`](test/live) applies, updates and
+destroys one of every resource on a real firewall.
 
 Conventions that apply everywhere:
 

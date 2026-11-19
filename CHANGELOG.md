@@ -1,4 +1,31 @@
-## 23.0.0 (Unreleased)
+## 23.1.0 (November 19, 2026)
+
+Covers the most used firewall objects according to configuration telemetry. Every
+resource was applied, updated and destroyed on a live SFOS v23 firewall (`test/live`).
+
+FEATURES:
+
+* **New Resource / Data Source:** `sophosfirewall_ipv4_group`, `sophosfirewall_ipv6_group`, `sophosfirewall_fqdn_group`: address groups
+* **New Resource / Data Source:** `sophosfirewall_service`: TCP/UDP, IP protocol, ICMP and ICMPv6 services
+* **New Resource / Data Source:** `sophosfirewall_service_group`: service groups
+* **New Resource / Data Source:** `sophosfirewall_schedule`: recurring and one-time schedules
+* **New Resource / Data Source:** `sophosfirewall_url_group`: URL groups, up to 10,000 domains
+* **New Resource / Data Source:** `sophosfirewall_dns_host_entry`: DNS host entries
+* **New Resource / Data Source:** `sophosfirewall_dhcp_server`: IPv4 DHCP servers
+* **New Resource / Data Source:** `sophosfirewall_user_group`: user groups
+* **New Resource / Data Source:** `sophosfirewall_static_route`, `sophosfirewall_gateway`, `sophosfirewall_sdwan_route`: static routes, custom gateways and SD-WAN routes
+
+BUG FIXES:
+
+* `sophosfirewall_interface`: bridge and LAG interfaces could not be created ("Invalid mtu"); LAG interfaces now take the `zone` the firewall requires
+* `sophosfirewall_interface`, `sophosfirewall_physical_interface`: validate that `mtu` exceeds `mss` by at least 40
+* Objects the firewall stores despite failing to activate them (`addRunConfigFailed`) are rolled back, and deletes the firewall reports as failed but still performs are no longer errors
+
+NOTES:
+
+* The provider description and README note that this is not an official Sophos provider.
+
+## 23.0.0 (November 19, 2026)
 
 BREAKING CHANGES:
 

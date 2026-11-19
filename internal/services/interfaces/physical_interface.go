@@ -81,6 +81,7 @@ var PhysicalInterface = &framework.Resource[physicalInterfaceModel, networkInter
 	Validate: func(_ context.Context, m *physicalInterfaceModel, diags *diag.Diagnostics) {
 		validateIP("ipv4", m.IPv4, diags)
 		validateIP("ipv6", m.IPv6, diags)
+		validateMTU(m.MTU, m.MSS, diags)
 	},
 	Expand: func(_ context.Context, m *physicalInterfaceModel, diags *diag.Diagnostics) *networkInterface {
 		return &networkInterface{
