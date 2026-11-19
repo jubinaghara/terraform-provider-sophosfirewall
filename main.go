@@ -1,5 +1,3 @@
-// main.go - Provider entry point
-
 package main
 
 import (
@@ -8,25 +6,26 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/provider"
 )
 
-// Main function - entry point for the provider
+// Generate documentation with tfplugindocs (see docs/ and templates/).
+//go:generate go tool tfplugindocs generate --provider-name sophosfirewall
+
+// version is set by goreleaser at build time.
+var version = "dev"
+
 func main() {
-	// Define a flag for enabling debug mode
 	var debug bool
-	flag.BoolVar(&debug, "debug", false, "set to true to run the provider with support for debuggers")
+	flag.BoolVar(&debug, "debug", false, "run the provider with support for debuggers like delve")
 	flag.Parse()
 
-	// Define provider options, including debug and address for the registry
-	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/jubinaghara/terraform-provider-sophosfirewall", // Update with your username/repo name
+	err := providerserver.Serve(context.Background(), provider.New(version), providerserver.ServeOpts{
+		Address: "registry.terraform.io/jubinaghara/sophosfirewall",
 		Debug:   debug,
-	}
-
-	// Start serving the provider
-	err := providerserver.Serve(context.Background(), provider.New, opts)
+	})
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal(err)
 	}
 }

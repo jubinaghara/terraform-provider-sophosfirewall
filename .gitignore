@@ -1,3 +1,30 @@
-/releases
+# Binaries
+terraform-provider-sophosfirewall
+terraform-provider-sophosfirewall.exe
+/bin/
+/dist/
 
+# Terraform working files from trying examples
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
 
+# The OpenAPI specification is used as a local reference only and is not
+# redistributed with the provider.
+*openapi*.yaml
+*openapi*.yml
+*openapi*.json
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local firewall credentials and demo artefacts
+firewall_details.txt
+tfplan

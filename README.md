@@ -1,101 +1,111 @@
----
-page_title: "sophosfirewall_iphost Resource - terraform-provider-sophosfirewall"
-subcategory: "Firewall"
-description: |-
-  Manages IP host objects in Sophos Firewall.
----
+# Terraform Provider for Sophos Firewall (SFOS)
 
-# Resource: sophosfirewall_iphost
+Manage Sophos Firewall configuration as code through the
+**Firewall Configuration REST API** (`https://<firewall>:<port>/api/firewall-config/v1`).
 
-Manages IP host objects in Sophos Firewall. IP hosts are used to define individual IP addresses, ranges, or networks that can be referenced in firewall rules.
+## Compatibility
 
-## Example Usage
+| Provider version | Sophos Firewall (SFOS) | API | Authentication |
+|------------------|------------------------|-----|----------------|
+| **23.x**         | **v23.0 and later**    | Firewall Configuration REST API | API key |
+| 1.x              | older firmware         | legacy XML API | username / password |
 
-### Single IP Address
+Version 23.0.0 is a rewrite and is **not** backwards compatible with 1.x configurations: the
+provider arguments, resource names and schemas are different. Pin `version = "~> 1.0"` to keep
+using the old provider.
 
-```terraform
-resource "sophosfirewall_iphost" "web_server" {
-  name       = "web_server"
-  ip_family  = "IPv4"
-  host_type  = "IP"
-  ip_address = "192.168.1.10"
+```hcl
+terraform {
+  required_providers {
+    sophosfirewall = {
+      source  = "jubinaghara/sophosfirewall"
+      version = "~> 23.0"
+    }
+  }
+}
+
+provider "sophosfirewall" {
+  endpoint = "https://172.16.16.16:4444" # or SFOS_ENDPOINT
+  api_key  = var.sophosfirewall_api_key  # or SFOS_API_KEY
+  insecure = true                        # factory self-signed certificate
+}
+
+resource "sophosfirewall_ipv4_address" "web" {
+  name       = "web-server"
+  ip_address = "203.0.113.10"
+}
+
+resource "sophosfirewall_firewall_rule" "allow_web" {
+  name              = "allow-web"
+  source_zones      = ["WAN"]
+  destination_zones = ["DMZ"]
+  destination_networks = {
+    ipv4_addresses = [sophosfirewall_ipv4_address.web.name]
+  }
+  services = ["HTTPS"]
 }
 ```
 
-### IP Range
+Create the API key under **Administration > API access** in the web admin console.
 
-```terraform
-resource "sophosfirewall_iphost" "dhcp_range" {
-  name             = "dhcp_clients"
-  ip_family        = "IPv4"
-  host_type        = "Range"
-  start_ip_address = "192.168.1.100"
-  end_ip_address   = "192.168.1.200"
-}
+## Supported objects
+
+| Area | Resource | Data source |
+|------|----------|-------------|
+| Hosts and services | `sophosfirewall_ipv4_address`, `sophosfirewall_ipv6_address` (host, network, range, list) | yes |
+| | `sophosfirewall_mac_address` (single or list) | yes |
+| | `sophosfirewall_fqdn_address` | yes |
+| | `sophosfirewall_country_group` | yes |
+| Network | `sophosfirewall_zone` | yes (also built-in zones such as `LAN`) |
+| | `sophosfirewall_interface` (VLAN, bridge, LAG) | yes (any interface) |
+| | `sophosfirewall_physical_interface` (adopts existing ports) | – |
+| Rules and policies | `sophosfirewall_firewall_rule` (IPv4) | yes |
+| | `sophosfirewall_nat_rule` (IPv4 SNAT / DNAT / port forwarding) | yes |
+
+Every resource supports `terraform import` by UUID or name. Full documentation is in
+[`docs/`](docs/) and on the Terraform Registry.
+
+Conventions that apply everywhere:
+
+* Objects reference each other **by name**, e.g. `ipv4_addresses = [sophosfirewall_ipv4_address.web.name]`.
+* Omitting a match criterion of a rule (zones, networks, services, interfaces) means **any**.
+* Optional blocks you do not configure are left alone and are not reported as drift.
+* Rule order is controlled with `position` (`top`, `bottom`, `before`, `after`) and `position_reference`.
+
+## Development
+
+Requirements: Go (see `go.mod`) and Terraform ≥ 1.5.
+
+```sh
+make build   # compile
+make test    # unit tests + end-to-end Terraform tests against an in-memory API fake
+make docs    # regenerate docs/ with tfplugindocs
+make install # install into ~/.terraform.d/plugins for local use
 ```
 
-### Network Subnet
+The test suite does not need a firewall: `internal/sfostest` implements a fake of the
+API (merge-patch semantics, server-side defaults, omitted empty lists), and
+`internal/acctest` runs real `terraform plan/apply/import` cycles against it.
 
-```terraform
-resource "sophosfirewall_iphost" "internal_lan" {
-  name       = "internal_lan"
-  ip_family  = "IPv4"
-  host_type  = "Network"
-  ip_address = "10.0.0.0"
-  subnet     = "255.255.0.0"
-}
-```
-
-## Argument Reference
-
-The following arguments are supported:
-
-* `name` - (Required) The name of the IP host object.
-* `ip_family` - (Required) IP address family. Valid values are `IPv4` or `IPv6`.
-* `host_type` - (Required) Type of host object. Valid values are `IP`, `Range`, or `Network`.
-* `ip_address` - (Required for `IP` and `Network` types) The IP address.
-* `subnet` - (Required for `Network` type) The subnet mask.
-* `start_ip_address` - (Required for `Range` type) The start IP address of the range.
-* `end_ip_address` - (Required for `Range` type) The end IP address of the range.
-
-## Attribute Reference
-
-In addition to all arguments above, the following attributes are exported:
-
-* `id` - The ID of the IP host object. This is the same as the `name`.
-
-## Import
-
-IP host objects can be imported using the name:
+### Architecture
 
 ```
-terraform import sophosfirewall_iphost.web_server web_server
+internal/
+  sfos/          HTTP client: auth, retries, errors, shared API types (NameRef, Selector)
+  framework/     generic resource + data source engine driven by a declarative spec
+  services/      one package per API area; each object type is a single spec file
+    shared/      rule match criteria (networks, zones, services) and rule positioning
+  provider/      provider configuration and the registry of object types
+  sfostest/      in-memory fake of the SFOS API
+  acctest/       test helpers wiring the fake to the provider
 ```
 
+Most SFOS objects share one REST contract (`POST` collection, `GET`/`PATCH`/`DELETE`
+`{collection}/{idOrName}`), so `internal/framework` implements CRUD, import,
+minimal JSON-merge-patch updates and data sources **once**. A new object type only
+supplies its schema, model and two conversion functions. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for a walkthrough.
 
+## License
 
-# Resource: sophosfirewall_firewall_rule
-
-Manage Firewall rules in Sophos Firewall. 
-
-```
-resource "sophos_firewall_rule" "allow_internal_web" {
-  name        = "Allow Internal Web Traffic"
-  description = "Allow HTTP/HTTPS traffic from LAN to WAN"
-  policy_type = "Network"
-  status      = "Enable"
-  position    = "Top"
-  ip_family   = "IPv4"
-  schedule    = "All the time"
-
-  action              = "Accept"
-  log_traffic         = "Enable"
-  skip_local_destined = "Disable"
-
-  source_zones        = ["LAN"]
-  destination_zones   = ["WAN"]
-
-  source_networks      = ["LAN_NETWORK"]
-  destination_networks = ["Any"]
-}
-```
+[MPL-2.0](LICENSE)
