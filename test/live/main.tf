@@ -393,6 +393,112 @@ resource "sophosfirewall_nat_rule" "dnat" {
   translated_destination = { ipv4_address = sophosfirewall_ipv4_address.host.name }
 }
 
+# ------------------------------------------------- security policies (23.2) --
+
+resource "sophosfirewall_web_policy" "this" {
+  name                = "TF-Live-WebPolicy"
+  description         = local.desc
+  default_action      = "allow"
+  enforce_safe_search = var.v2
+  youtube_filter      = var.v2 ? "moderate" : "off"
+  rules = concat(
+    [{
+      categories  = ["Hacking"]
+      url_groups  = [sophosfirewall_url_group.this.name]
+      http_action = "deny"
+    }],
+    var.v2 ? [{
+      categories         = ["Advertisements"]
+      http_action        = "deny"
+      follow_http_action = false
+      https_action       = "warn"
+      schedule           = sophosfirewall_schedule.recurring.name
+    }] : [],
+  )
+}
+
+resource "sophosfirewall_web_exception" "this" {
+  name        = "TF-Live-WebException"
+  description = local.desc
+  enabled     = !var.v2
+  conditions = {
+    web_categories  = ["Hacking"]
+    source_networks = var.v2 ? ["10.98.50.0/24", "10.98.51.0/24"] : ["10.98.50.0/24"]
+  }
+  skip = {
+    https_decryption       = true
+    certificate_validation = true
+    malware_scanning       = var.v2
+  }
+}
+
+resource "sophosfirewall_traffic_shaping_policy" "this" {
+  name            = "TF-Live-QoS"
+  description     = local.desc
+  associates_with = "rules"
+  type            = "bestEffort"
+  bandwidth = {
+    limit = var.v2 ? { aggregated_kbps = 20480 } : { aggregated_kbps = 10240 }
+  }
+  scheduled_overrides = [{
+    schedule  = sophosfirewall_schedule.recurring.name
+    bandwidth = { limit = { aggregated_kbps = var.v2 ? 2048 : 1024 } }
+  }]
+}
+
+resource "sophosfirewall_ips_policy" "this" {
+  name        = "TF-Live-IPS"
+  description = local.desc
+  rules = concat(
+    var.v2 ? [{ name = "TFLive-Client", targets = ["Client"], action = "dropPacket" }] : [],
+    [{
+      name       = "TFLive-Critical"
+      action     = var.v2 ? "dropSession" : "dropPacket"
+      severities = ["Critical", "Major"]
+      targets    = ["Server"]
+      platforms  = ["Linux", "Windows"]
+    }],
+  )
+}
+
+resource "sophosfirewall_application_filter_policy" "this" {
+  name        = "TF-Live-AppPolicy"
+  description = local.desc
+  rules = concat(
+    [{
+      name         = "TFLive-Allow-Teams"
+      action       = "allow"
+      applications = ["Microsoft Teams"]
+    }],
+    [{
+      name     = "TFLive-Deny-Risky"
+      action   = "deny"
+      risks    = var.v2 ? ["High", "Very High"] : ["Very High"]
+      schedule = var.v2 ? sophosfirewall_schedule.recurring.name : null
+    }],
+  )
+}
+
+# Applies all four policies; only matches the unused 10.98.10.0/24 network.
+resource "sophosfirewall_firewall_rule" "secure" {
+  name              = "TF-Live-Secure"
+  position          = var.v2 ? "top" : "bottom"
+  source_zones      = ["LAN"]
+  destination_zones = ["WAN"]
+  source_networks = {
+    ipv4_addresses = [sophosfirewall_ipv4_address.network.name]
+  }
+  security_features = {
+    web_policy         = sophosfirewall_web_policy.this.name
+    ips_policy         = sophosfirewall_ips_policy.this.name
+    application_policy = sophosfirewall_application_filter_policy.this.name
+  }
+  qos = {
+    traffic_shaping_policy = sophosfirewall_traffic_shaping_policy.this.name
+  }
+  depends_on = [sophosfirewall_firewall_rule.drop]
+}
+
 # ------------------------------------------------------------ data sources ---
 # One per data source type; each reads back an object created above (or a
 # built-in one) and the outputs are compared with the resources.
@@ -426,6 +532,14 @@ data "sophosfirewall_nat_rule" "this" { name = sophosfirewall_nat_rule.snat.name
 data "sophosfirewall_schedule" "this" { name = sophosfirewall_schedule.recurring.name }
 data "sophosfirewall_url_group" "this" { name = sophosfirewall_url_group.this.name }
 data "sophosfirewall_dns_host_entry" "this" { name = sophosfirewall_dns_host_entry.this.name }
+data "sophosfirewall_web_policy" "builtin" { name = "Default Workplace Policy" }
+data "sophosfirewall_web_policy" "this" { name = sophosfirewall_web_policy.this.name }
+data "sophosfirewall_web_exception" "this" { name = sophosfirewall_web_exception.this.name }
+data "sophosfirewall_traffic_shaping_policy" "this" { name = sophosfirewall_traffic_shaping_policy.this.name }
+data "sophosfirewall_ips_policy" "builtin" { name = "generalpolicy" }
+data "sophosfirewall_ips_policy" "this" { name = sophosfirewall_ips_policy.this.name }
+data "sophosfirewall_application_filter_policy" "builtin" { name = "Block high risk (Risk Level 4 and 5) apps" }
+data "sophosfirewall_application_filter_policy" "this" { name = sophosfirewall_application_filter_policy.this.name }
 
 output "data_source_checks" {
   description = "Every value must be true."
@@ -456,5 +570,13 @@ output "data_source_checks" {
     schedule      = data.sophosfirewall_schedule.this.id == sophosfirewall_schedule.recurring.id
     url_group     = data.sophosfirewall_url_group.this.id == sophosfirewall_url_group.this.id
     dns_host      = data.sophosfirewall_dns_host_entry.this.id == sophosfirewall_dns_host_entry.this.id
+    web_built     = data.sophosfirewall_web_policy.builtin.id != ""
+    web_policy    = data.sophosfirewall_web_policy.this.id == sophosfirewall_web_policy.this.id
+    web_exception = data.sophosfirewall_web_exception.this.id == sophosfirewall_web_exception.this.id
+    qos_policy    = data.sophosfirewall_traffic_shaping_policy.this.id == sophosfirewall_traffic_shaping_policy.this.id
+    ips_built     = data.sophosfirewall_ips_policy.builtin.id != ""
+    ips_policy    = data.sophosfirewall_ips_policy.this.id == sophosfirewall_ips_policy.this.id
+    app_built     = data.sophosfirewall_application_filter_policy.builtin.id != ""
+    app_policy    = data.sophosfirewall_application_filter_policy.this.id == sophosfirewall_application_filter_policy.this.id
   }
 }

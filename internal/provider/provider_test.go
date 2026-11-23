@@ -34,6 +34,7 @@ func TestSchemas(t *testing.T) {
 		return strings.Join(names, ",")
 	}
 	wantResources := []string{
+		"sophosfirewall_application_filter_policy",
 		"sophosfirewall_country_group",
 		"sophosfirewall_dhcp_server",
 		"sophosfirewall_dns_host_entry",
@@ -42,6 +43,7 @@ func TestSchemas(t *testing.T) {
 		"sophosfirewall_fqdn_group",
 		"sophosfirewall_gateway",
 		"sophosfirewall_interface",
+		"sophosfirewall_ips_policy",
 		"sophosfirewall_ipv4_address",
 		"sophosfirewall_ipv4_group",
 		"sophosfirewall_ipv6_address",
@@ -54,11 +56,15 @@ func TestSchemas(t *testing.T) {
 		"sophosfirewall_service",
 		"sophosfirewall_service_group",
 		"sophosfirewall_static_route",
+		"sophosfirewall_traffic_shaping_policy",
 		"sophosfirewall_url_group",
 		"sophosfirewall_user_group",
+		"sophosfirewall_web_exception",
+		"sophosfirewall_web_policy",
 		"sophosfirewall_zone",
 	}
 	wantDataSources := []string{
+		"sophosfirewall_application_filter_policy",
 		"sophosfirewall_country_group",
 		"sophosfirewall_dhcp_server",
 		"sophosfirewall_dns_host_entry",
@@ -67,6 +73,7 @@ func TestSchemas(t *testing.T) {
 		"sophosfirewall_fqdn_group",
 		"sophosfirewall_gateway",
 		"sophosfirewall_interface",
+		"sophosfirewall_ips_policy",
 		"sophosfirewall_ipv4_address",
 		"sophosfirewall_ipv4_group",
 		"sophosfirewall_ipv6_address",
@@ -78,8 +85,11 @@ func TestSchemas(t *testing.T) {
 		"sophosfirewall_service",
 		"sophosfirewall_service_group",
 		"sophosfirewall_static_route",
+		"sophosfirewall_traffic_shaping_policy",
 		"sophosfirewall_url_group",
 		"sophosfirewall_user_group",
+		"sophosfirewall_web_exception",
+		"sophosfirewall_web_policy",
 		"sophosfirewall_zone",
 	}
 	if want := strings.Join(wantResources, ","); got(resp.ResourceSchemas) != want {

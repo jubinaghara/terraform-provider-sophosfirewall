@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -89,7 +90,67 @@ func MoveIfChanged(ctx context.Context, c *sfos.Client, movePath, name string, p
 		return
 	}
 	pos, ref := plan.API()
-	if err := c.Post(ctx, movePath, moveRequest{Name: name, Position: pos, ReferenceItem: ref}, nil); err != nil {
+	if err := move(ctx, c, movePath, name, pos, ref); err != nil {
 		diags.AddError(fmt.Sprintf("Unable to move rule %q", name), err.Error())
 	}
+}
+
+// move calls the /move endpoint. Although the API specification lists
+// top and bottom, SFOS v23 move endpoints accept only before and after,
+// so top and bottom are sent as before the first / after the last rule.
+func move(ctx context.Context, c *sfos.Client, movePath, name, pos string, ref *sfos.NameRef) error {
+	if pos == PositionTop || pos == PositionBottom {
+		names, err := listNames(ctx, c, strings.TrimSuffix(movePath, "/move"))
+		if err != nil {
+			return err
+		}
+		var others []string
+		for _, n := range names {
+			if n != name {
+				others = append(others, n)
+			}
+		}
+		switch {
+		case len(others) == 0:
+			return nil // the only rule is already at the top and the bottom
+		case pos == PositionTop && names[0] == name, pos == PositionBottom && names[len(names)-1] == name:
+			return nil
+		case pos == PositionTop:
+			pos, ref = PositionBefore, &sfos.NameRef{Name: others[0]}
+		default:
+			pos, ref = PositionAfter, &sfos.NameRef{Name: others[len(others)-1]}
+		}
+	}
+	return c.Post(ctx, movePath, moveRequest{Name: name, Position: pos, ReferenceItem: ref}, nil)
+}
+
+// maxListPages bounds listNames in case the API ignores the page parameter.
+const maxListPages = 1000
+
+// listNames returns the names of all objects in a collection, in order.
+func listNames(ctx context.Context, c *sfos.Client, collection string) ([]string, error) {
+	var names []string
+	for page := 1; page <= maxListPages; page++ {
+		var resp struct {
+			Items []struct {
+				Name string `json:"name"`
+			} `json:"items"`
+			Pages struct {
+				Size int `json:"size"`
+			} `json:"pages"`
+		}
+		if err := c.Get(ctx, fmt.Sprintf("%s?page=%d", collection, page), &resp); err != nil {
+			return nil, err
+		}
+		if len(resp.Items) > 0 && len(names) > 0 && resp.Items[0].Name == names[0] {
+			break // page parameter ignored: the first page was returned again
+		}
+		for _, it := range resp.Items {
+			names = append(names, it.Name)
+		}
+		if len(resp.Items) == 0 || len(resp.Items) < resp.Pages.Size || resp.Pages.Size == 0 {
+			break
+		}
+	}
+	return names, nil
 }

@@ -1,3 +1,23 @@
+## 23.2.0 (November 23, 2026)
+
+Adds the security policies that firewall rules apply, which configuration telemetry shows
+on more than 99% of firewalls. Every resource was applied, updated and destroyed on a live
+SFOS v23 firewall (`test/live`).
+
+FEATURES:
+
+* **New Resource / Data Source:** `sophosfirewall_web_policy`: web policies with ordered rules (categories, URL groups, file types, user activities; HTTP/HTTPS actions, quotas, schedules)
+* **New Resource / Data Source:** `sophosfirewall_web_exception`: web exceptions that skip HTTPS decryption, certificate validation, malware scanning, zero-day protection or the policy check
+* **New Resource / Data Source:** `sophosfirewall_traffic_shaping_policy`: QoS policies (guaranteed or best-effort, aggregated or per-direction bandwidth, scheduled overrides)
+* **New Resource / Data Source:** `sophosfirewall_ips_policy`: intrusion prevention policies with ordered rules selecting signatures by filter or by name
+* **New Resource / Data Source:** `sophosfirewall_application_filter_policy`: application filter policies with ordered rules selecting applications by name or by category, risk, characteristic, technology or classification
+* All five can be applied by `sophosfirewall_firewall_rule` (`security_features.web_policy`, `ips_policy`, `application_policy` and `qos.traffic_shaping_policy`), and their data sources also read built-in policies
+
+BUG FIXES:
+
+* `sophosfirewall_firewall_rule`, `sophosfirewall_nat_rule`, `sophosfirewall_sdwan_route`: changing `position` of an existing rule to `top` or `bottom` failed with "top is not a valid MovePosition". The firewall's move endpoints accept only `before`/`after`, so the rule is now moved before the first or after the last rule.
+* `sophosfirewall_web_policy`: works around SFOS v23 storing the inverse of the `reporting` value written; the value is checked and corrected after every create and update.
+
 ## 23.1.0 (November 19, 2026)
 
 Covers the most used firewall objects according to configuration telemetry. Every

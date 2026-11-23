@@ -1,5 +1,5 @@
 BINARY  := terraform-provider-sophosfirewall
-VERSION ?= 23.0.0
+VERSION ?= 23.2.0
 OS_ARCH := $(shell go env GOOS)_$(shell go env GOARCH)
 PLUGIN_DIR := $(HOME)/.terraform.d/plugins/registry.terraform.io/jubinaghara/sophosfirewall/$(VERSION)/$(OS_ARCH)
 

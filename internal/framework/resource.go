@@ -98,6 +98,12 @@ func (r *genericResource[M, A]) Create(ctx context.Context, req resource.CreateR
 	if id == "" {
 		id = name
 	}
+	if r.spec.AfterCreate != nil {
+		r.spec.AfterCreate(ctx, r.client, &plan, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
 
 	m, found := r.read(ctx, id, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {

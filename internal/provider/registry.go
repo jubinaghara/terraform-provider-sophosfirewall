@@ -5,14 +5,17 @@ import (
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/addresses"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/addressgroups"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/administration"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/application"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/authentication"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/dhcp"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/dns"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/firewall"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/interfaces"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/ips"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/nat"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/routing"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/servicesobj"
+	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/trafficshaping"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/web"
 	"github.com/jubinaghara/terraform-provider-sophosfirewall/internal/services/zones"
 )
@@ -43,6 +46,13 @@ var registry = []framework.Registration{
 	// Protect > Rules and policies
 	firewall.RuleIPv4,
 	nat.RuleIPv4,
+	trafficshaping.Policy,
+
+	// Protect > Intrusion prevention
+	ips.Policy,
+
+	// Protect > Applications
+	application.FilterPolicy,
 
 	// Configure > Network > DHCP
 	dhcp.Server,
@@ -60,6 +70,8 @@ var registry = []framework.Registration{
 
 	// Protect > Web
 	web.URLGroup,
+	web.Exception,
+	web.Policy,
 
 	// System > Profiles
 	administration.Schedule,

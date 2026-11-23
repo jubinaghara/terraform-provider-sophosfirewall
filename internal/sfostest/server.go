@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -32,6 +33,18 @@ type Collection struct {
 	Movable bool
 	// OnCreate can derive server-side fields of a new object.
 	OnCreate func(obj map[string]any)
+	// AfterWrite can mimic firewall quirks: it runs on the stored object
+	// after every create and PATCH, with the request body.
+	AfterWrite func(obj, body map[string]any)
+}
+
+// SetAfterWrite installs Collection.AfterWrite on an existing collection.
+func (s *Server) SetAfterWrite(collection string, fn func(obj, body map[string]any)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg := s.collections[collection]
+	cfg.AfterWrite = fn
+	s.collections[collection] = cfg
 }
 
 // Server is a fake SFOS API.
@@ -119,6 +132,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	// Collection-level requests.
 	if cfg, ok := s.collections[p]; ok {
+		if r.Method == http.MethodGet {
+			s.list(w, r, p)
+			return
+		}
 		if r.Method != http.MethodPost {
 			writeError(w, http.StatusMethodNotAllowed, "methodNotAllowed", r.Method)
 			return
@@ -140,8 +157,14 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if cfg.OnCreate != nil {
 			cfg.OnCreate(obj)
 		}
+		if cfg.AfterWrite != nil {
+			cfg.AfterWrite(obj, body)
+		}
 		obj["id"] = s.newID()
 		s.objects[p] = append(s.objects[p], obj)
+		if cfg.Movable {
+			s.placeNew(p, body)
+		}
 		writeJSON(w, http.StatusCreated, present(obj))
 		return
 	}
@@ -160,7 +183,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	if last == "move" && cfg.Movable && r.Method == http.MethodPost {
 		s.Moves = append(s.Moves, body)
-		writeJSON(w, http.StatusOK, map[string]any{"moved": true})
+		s.move(w, collection, body)
 		return
 	}
 	idOrName, _ := url.PathUnescape(last)
@@ -179,6 +202,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		merged := applyPatch(obj, body)
 		merged["id"] = obj["id"]
+		if cfg.AfterWrite != nil {
+			cfg.AfterWrite(merged, body)
+		}
 		s.objects[collection][idx] = merged
 		writeJSON(w, http.StatusOK, present(merged))
 	case http.MethodDelete:
@@ -187,6 +213,86 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "methodNotAllowed", r.Method)
 	}
+}
+
+// listPageSize is the page size of collection listings (the API default).
+const listPageSize = 50
+
+// list serves GET {collection}?page=N like the real API.
+func (s *Server) list(w http.ResponseWriter, r *http.Request, collection string) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	all := s.objects[collection]
+	items := []any{}
+	for i := (page - 1) * listPageSize; i < len(all) && i < page*listPageSize; i++ {
+		items = append(items, present(all[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items,
+		"pages": map[string]any{"current": page, "size": listPageSize, "maxSize": 100},
+	})
+}
+
+// placeNew moves the just-appended object to the position requested on
+// create, where all four positions are accepted.
+func (s *Server) placeNew(collection string, body map[string]any) {
+	objs := s.objects[collection]
+	obj := objs[len(objs)-1]
+	rest := objs[:len(objs)-1]
+	at := len(rest)
+	switch body["position"] {
+	case "top":
+		at = 0
+	case "before", "after":
+		ref, _ := body["referenceItem"].(map[string]any)
+		for i, o := range rest {
+			if o["name"] == ref["name"] {
+				at = i
+				if body["position"] == "after" {
+					at++
+				}
+			}
+		}
+	}
+	s.objects[collection] = append(append(append([]map[string]any{}, rest[:at]...), obj), rest[at:]...)
+}
+
+// move implements POST {collection}/move. Like SFOS v23 (and unlike its
+// API specification) only "before" and "after" are accepted.
+func (s *Server) move(w http.ResponseWriter, collection string, body map[string]any) {
+	pos, _ := body["position"].(string)
+	if pos != "before" && pos != "after" {
+		writeError(w, http.StatusBadRequest, "invalidRequest",
+			fmt.Sprintf("%s is not a valid MovePosition, allowed values are [after before]", pos))
+		return
+	}
+	name, _ := body["name"].(string)
+	ref, _ := body["referenceItem"].(map[string]any)
+	refName, _ := ref["name"].(string)
+	idx, obj := s.find(collection, name)
+	if obj == nil || refName == "" || refName == name {
+		writeError(w, http.StatusBadRequest, "invalidRequest", "Invalid rule or reference item.")
+		return
+	}
+	rest := append(append([]map[string]any{}, s.objects[collection][:idx]...), s.objects[collection][idx+1:]...)
+	at := -1
+	for i, o := range rest {
+		if o["name"] == refName {
+			at = i
+		}
+	}
+	if at < 0 {
+		writeError(w, http.StatusNotFound, "notFound", "Reference item not found.")
+		return
+	}
+	if pos == "after" {
+		at++
+	}
+	out := append(append(append([]map[string]any{}, rest[:at]...), obj), rest[at:]...)
+	s.objects[collection] = out
+	writeJSON(w, http.StatusOK, map[string]any{"moved": true})
 }
 
 func (s *Server) find(collection, idOrName string) (int, map[string]any) {

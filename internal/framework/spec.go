@@ -65,6 +65,8 @@ type Resource[M any, A any] struct {
 	Validate func(ctx context.Context, m *M, diags *diag.Diagnostics)
 	// AfterUpdate runs after a successful PATCH, e.g. to move a rule.
 	AfterUpdate func(ctx context.Context, c *sfos.Client, plan, state *M, diags *diag.Diagnostics)
+	// AfterCreate runs after a successful POST (or adoption), before the read-back.
+	AfterCreate func(ctx context.Context, c *sfos.Client, plan *M, diags *diag.Diagnostics)
 
 	// NoDataSource disables the automatically derived data source.
 	NoDataSource bool

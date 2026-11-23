@@ -139,11 +139,33 @@ resource "sophosfirewall_firewall_rule" "second" {
 					if m["name"] != "second" || m["position"] != "before" || m["referenceItem"].(map[string]any)["name"] != "first" {
 						return fmt.Errorf("unexpected move %v", m)
 					}
-					return nil
+					return checkOrder(env, "second", "first")(nil)
+				},
+			},
+			// SFOS rejects top/bottom on /move: they are sent relative to the first/last rule.
+			{Config: config(`position = "bottom"`), Check: checkOrder(env, "first", "second")},
+			{Config: config(`position = "top"`), Check: checkOrder(env, "second", "first")},
+			{
+				Config: config(`position = "bottom"`),
+				Check: func(*terraform.State) error {
+					m := env.Server.Moves[len(env.Server.Moves)-1]
+					if m["position"] != "after" || m["referenceItem"].(map[string]any)["name"] != "first" {
+						return fmt.Errorf("unexpected move %v", m)
+					}
+					return checkOrder(env, "first", "second")(nil)
 				},
 			},
 		},
 	})
+}
+
+func checkOrder(env *acctest.Env, want ...string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		if got := env.Server.Names(rulesPath); fmt.Sprint(got) != fmt.Sprint(want) {
+			return fmt.Errorf("rule order is %v, want %v", got, want)
+		}
+		return nil
+	}
 }
 
 func TestFirewallRulePositionValidation(t *testing.T) {

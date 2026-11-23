@@ -108,7 +108,47 @@ func Collections() map[string]sfostest.Collection {
 		}),
 		"/network/dns/host-entries": {Defaults: map[string]any{"enableReverseResolution": false}},
 		"/web/url-groups":           {Defaults: map[string]any{"description": ""}},
+		"/web/exceptions":           {OnCreate: webExceptionDefaults},
+		"/web/policies": {Defaults: map[string]any{
+			"description": "", "reporting": true, "restrictFileSize": false, "enforceSafeSearch": false,
+			"filterByImageLicense": false, "youtubeFilter": "off", "quotaLimit": 60, "propagateXForwardedFor": false,
+			"restrictGoogleAppDomains": false, "restrictOffice365Tenants": false,
+		}},
 		"/administration/schedules": {Defaults: map[string]any{"description": ""}},
+
+		// IPS policies; the rule lists are stored and returned as sent.
+		"/intrusion-prevention/policies": {Defaults: map[string]any{"description": ""}},
+		"/traffic-shaping/policies":      {Defaults: map[string]any{"description": ""}},
+		"/application/policies":          {OnCreate: appPolicyDefaults},
+	}
+}
+
+// appPolicyDefaults mimics the firewall for a new application filter
+// policy: an empty description, server-assigned rule ids, and the implicit
+// "Cloud Application" characteristics row added to classification filters.
+func appPolicyDefaults(obj map[string]any) {
+	if _, ok := obj["description"]; !ok {
+		obj["description"] = ""
+	}
+	rules, _ := obj["rules"].([]any)
+	for i, r := range rules {
+		rule := r.(map[string]any)
+		rule["id"] = fmt.Sprintf("10000000-0000-4000-8000-%012d", i+1)
+		filters, _ := rule["applicationFilters"].([]any)
+		hasClassification, hasCharacteristics := false, false
+		for _, f := range filters {
+			switch f.(map[string]any)["attribute"] {
+			case "classification":
+				hasClassification = true
+			case "characteristics":
+				hasCharacteristics = true
+			}
+		}
+		if hasClassification && !hasCharacteristics {
+			rule["applicationFilters"] = append(filters, map[string]any{
+				"attribute": "characteristics", "operator": "in", "values": []any{"Cloud Application"},
+			})
+		}
 	}
 }
 
@@ -185,6 +225,38 @@ func userGroupDefaults(obj map[string]any) {
 			vpn[k] = false
 		}
 	}
+}
+
+// webExceptionDefaults fills in what the firewall always returns for a web
+// exception: every condition (switched off unless given) and every skip flag.
+func webExceptionDefaults(obj map[string]any) {
+	fill := func(m map[string]any, defaults map[string]any) {
+		for k, v := range defaults {
+			if _, ok := m[k]; !ok {
+				m[k] = v
+			}
+		}
+	}
+	child := func(m map[string]any, k string) map[string]any {
+		c, _ := m[k].(map[string]any)
+		if c == nil {
+			c = map[string]any{}
+			m[k] = c
+		}
+		return c
+	}
+	fill(obj, map[string]any{"description": "", "enabled": true})
+	conditions := child(obj, "conditions")
+	for _, k := range []string{"sourceIpOrNetworks", "destinationIpOrNetworks"} {
+		fill(child(conditions, k), map[string]any{"enabled": false, "ipv4Networks": []any{}, "ipv6Networks": []any{}})
+	}
+	for _, k := range []string{"urlRegexPatterns", "webCategories"} {
+		fill(child(conditions, k), map[string]any{"enabled": false, "values": []any{}})
+	}
+	fill(child(obj, "skip"), map[string]any{
+		"httpsDecryption": false, "certificateValidation": false, "malwareScanning": false,
+		"zeroDayProtection": false, "policyCheck": false,
+	})
 }
 
 // gatewayHealthCheckDefaults fills in the firewall's health check defaults

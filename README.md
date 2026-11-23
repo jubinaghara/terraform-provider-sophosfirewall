@@ -22,7 +22,7 @@ terraform {
   required_providers {
     sophosfirewall = {
       source  = "jubinaghara/sophosfirewall"
-      version = "~> 23.0"
+      version = "~> 23.2"
     }
   }
 }
@@ -72,7 +72,12 @@ Create the API key under **Administration > API access** in the web admin consol
 | | `sophosfirewall_sdwan_route` (IPv4, ordered) | yes |
 | Rules and policies | `sophosfirewall_firewall_rule` (IPv4) | yes |
 | | `sophosfirewall_nat_rule` (IPv4 SNAT / DNAT / port forwarding) | yes |
+| | `sophosfirewall_ips_policy` (intrusion prevention, ordered rules) | yes (also built-in policies) |
+| | `sophosfirewall_traffic_shaping_policy` (QoS: guaranteed or best-effort, scheduled overrides) | yes |
+| | `sophosfirewall_application_filter_policy` (ordered rules, applied via firewall rules) | yes (also built-in policies) |
 | Web | `sophosfirewall_url_group` | yes |
+| | `sophosfirewall_web_exception` | yes |
+| | `sophosfirewall_web_policy` (with ordered rules) | yes |
 | Authentication | `sophosfirewall_user_group` | yes (also built-in groups such as `Open Group`) |
 | System | `sophosfirewall_schedule` (recurring or one-time) | yes |
 
